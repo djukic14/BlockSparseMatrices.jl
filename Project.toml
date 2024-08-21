@@ -1,0 +1,13 @@
+name = "BlockSparseMatrices"
+uuid = "1ef78180-cc57-4e70-b6ec-c3e471307147"
+authors = ["djukic14 <danijel.jukic14@gmail.com> and contributors"]
+version = "1.0.0-DEV"
+
+[compat]
+julia = "1"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]
