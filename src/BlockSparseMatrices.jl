@@ -1,5 +1,14 @@
 module BlockSparseMatrices
+using LinearAlgebra
+using SparseArrays
+using LinearMaps
 
-# Write your package code here.
+include("matrixblock/abstractmatrixblock.jl")
+include("matrixblock/densematrixblock.jl")
+include("blockmatrix.jl")
 
-end
+export DenseMatrixBlock, BlockSparseMatrix
+export rowindices, colindices
+export eachblockindex, block
+
+end # module BlockSparseMatrices
