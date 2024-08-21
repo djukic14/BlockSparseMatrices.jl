@@ -4,6 +4,22 @@ struct BlockSparseMatrix{T,M} <: LinearMap{T}
     buffer::Vector{T}
 end
 
+function BlockSparseMatrix(
+    blocks::Vector{M}, rowindices::V, colindices::V, size::Tuple{Int,Int}
+) where {M,V}
+    denseblockmatrices = Vector{DenseMatrixBlock{eltype(M),M,eltype(rowindices)}}(
+        undef, length(blocks)
+    )
+
+    for i in eachindex(blocks)
+        denseblockmatrices[i] = DenseMatrixBlock(blocks[i], rowindices[i], colindices[i])
+    end
+
+    return BlockSparseMatrix{eltype(M),eltype(denseblockmatrices)}(
+        denseblockmatrices, size, Vector{eltype(M)}(undef, size[1])
+    )
+end
+
 function BlockSparseMatrix(blocks::Vector{M}, rows::Int, cols::Int) where {M}
     return BlockSparseMatrix{eltype(M),M}(
         blocks, (rows, cols), Vector{eltype(M)}(undef, rows)
