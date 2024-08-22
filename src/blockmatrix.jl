@@ -97,7 +97,7 @@ function LinearMaps._unsafe_mul!(
     y .= zero(eltype(y))
     for blockid in eachblockindex(A)
         b = block(A, blockid)
-        LinearAlgebra.mul!(view(y, rowindices(b)), b, view(x, colindices(b)))
+        @inbounds LinearAlgebra.mul!(view(y, rowindices(b)), b, view(x, colindices(b)))
     end
     return y
 end
