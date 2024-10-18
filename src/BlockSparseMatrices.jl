@@ -6,8 +6,9 @@ using LinearMaps
 include("matrixblock/abstractmatrixblock.jl")
 include("matrixblock/densematrixblock.jl")
 include("blockmatrix.jl")
+include("symmetricblockmatrix.jl")
 
-export DenseMatrixBlock, BlockSparseMatrix
+export DenseMatrixBlock, BlockSparseMatrix, SymmetricBlockMatrix
 export rowindices, colindices
 export eachblockindex, block
 
