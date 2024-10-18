@@ -1,6 +1,8 @@
 struct BlockSparseMatrix{T,M} <: LinearMap{T}
     blocks::Vector{M}
     size::Tuple{Int,Int}
+    forwardbuffer::Vector{T}
+    adjointbuffer::Vector{T}
     buffer::Vector{T}
 end
 
@@ -15,8 +17,11 @@ function BlockSparseMatrix(
         denseblockmatrices[i] = DenseMatrixBlock(blocks[i], rowindices[i], colindices[i])
     end
 
+    buffer = Vector{eltype(M)}(undef, maximum(size))
+    forwardbuffer = unsafe_wrap(typeof(buffer), pointer(buffer), size[1])
+    adjointbuffer = unsafe_wrap(typeof(buffer), pointer(buffer), size[2])
     return BlockSparseMatrix{eltype(M),eltype(denseblockmatrices)}(
-        denseblockmatrices, size, Vector{eltype(M)}(undef, size[1])
+        denseblockmatrices, size, forwardbuffer, adjointbuffer, buffer
     )
 end
 
@@ -67,7 +72,7 @@ function block(A::M, i) where {Z<:BlockSparseMatrix,T,M<:LinearMaps.TransposeMap
 end
 
 function buffer(A::BlockSparseMatrix)
-    return A.buffer
+    return A.forwardbuffer
 end
 
 function buffer(
@@ -75,7 +80,7 @@ function buffer(
 ) where {
     Z<:BlockSparseMatrix,T,M<:Union{LinearMaps.AdjointMap{T,Z},LinearMaps.TransposeMap{T,Z}}
 }
-    return buffer(A.lmap)
+    return A.lmap.adjointbuffer
 end
 
 function SparseArrays.nnz(A::BlockSparseMatrix)
