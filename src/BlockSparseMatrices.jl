@@ -3,6 +3,7 @@ using LinearAlgebra
 using SparseArrays
 using LinearMaps
 
+include("abstractblockmatrix.jl")
 include("matrixblock/abstractmatrixblock.jl")
 include("matrixblock/densematrixblock.jl")
 include("blockmatrix.jl")

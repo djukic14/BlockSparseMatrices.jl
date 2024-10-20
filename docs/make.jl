@@ -1,7 +1,9 @@
 using BlockSparseMatrices
 using Documenter
 
-DocMeta.setdocmeta!(BlockSparseMatrices, :DocTestSetup, :(using BlockSparseMatrices); recursive=true)
+DocMeta.setdocmeta!(
+    BlockSparseMatrices, :DocTestSetup, :(using BlockSparseMatrices); recursive=true
+)
 
 makedocs(;
     modules=[BlockSparseMatrices],
@@ -12,12 +14,7 @@ makedocs(;
         edit_link="main",
         assets=String[],
     ),
-    pages=[
-        "Home" => "index.md",
-    ],
+    pages=["Home" => "index.md"],
 )
 
-deploydocs(;
-    repo="github.com/djukic14/BlockSparseMatrices.jl",
-    devbranch="main",
-)
+deploydocs(; repo="github.com/djukic14/BlockSparseMatrices.jl", devbranch="main")

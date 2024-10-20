@@ -1,7 +1,9 @@
-struct SymmetricBlockMatrix{T,DM,M} <: LinearMap{T}
+struct SymmetricBlockMatrix{T,DM,M} <: AbstractBlockMatrix{T}
     diagonals::Vector{DM}
     offdiagonals::Vector{M}
     size::Tuple{Int,Int}
+    forwardbuffer::Vector{T}
+    adjointbuffer::Vector{T}
     buffer::Vector{T}
 end
 
@@ -29,17 +31,7 @@ function SymmetricBlockMatrix(
         diagonalblocks[i] = DenseMatrixBlock(diagonals[i], drowidcs[i], dcolidcs[i])
     end
 
-    return SymmetricBlockMatrix{eltype(M),eltype(diagonalblocks),eltype(offdiagonalblocks)}(
-        diagonalblocks, offdiagonalblocks, size, Vector{eltype(M)}(undef, size[1])
-    )
-end
-
-function SymmetricBlockMatrix(
-    diagonals::Vector{DM}, offdiagonals::Vector{M}, rows::Int, cols::Int
-) where {DM,M}
-    return SymmetricBlockMatrix{eltype(M),DM,M}(
-        diagonals, offdiagonals, (rows, cols), Vector{eltype(M)}(undef, rows)
-    )
+    return SymmetricBlockMatrix(diagonalblocks, offdiagonalblocks, size)
 end
 
 function SymmetricBlockMatrix(
@@ -48,16 +40,13 @@ function SymmetricBlockMatrix(
     return SymmetricBlockMatrix(diagonals, offdiagonals, size[1], size[2])
 end
 
-function Base.eltype(m::SymmetricBlockMatrix{T}) where {T}
-    return eltype(typeof(m))
-end
-
-function Base.eltype(::Type{<:SymmetricBlockMatrix{T,DM,M}}) where {T,DM,M}
-    return T
-end
-
-function Base.size(A::SymmetricBlockMatrix)
-    return A.size
+function SymmetricBlockMatrix(
+    diagonals::Vector{DM}, offdiagonals::Vector{M}, rows::Int, cols::Int
+) where {DM,M}
+    forwardbuffer, adjointbuffer, buffer = buffers(eltype(M), rows, cols)
+    return SymmetricBlockMatrix{eltype(M),DM,M}(
+        diagonals, offdiagonals, (rows, cols), forwardbuffer, adjointbuffer, buffer
+    )
 end
 
 function eachoffdiagonalindex(A::SymmetricBlockMatrix)
@@ -116,20 +105,6 @@ function diagonal(A::M, i) where {Z<:SymmetricBlockMatrix,T,M<:LinearMaps.Transp
     return transpose(diagonal(A.lmap, i))
 end
 
-function buffer(A::SymmetricBlockMatrix)
-    return A.buffer
-end
-
-function buffer(
-    A::M
-) where {
-    Z<:SymmetricBlockMatrix,
-    T,
-    M<:Union{LinearMaps.AdjointMap{T,Z},LinearMaps.TransposeMap{T,Z}},
-}
-    return buffer(A.lmap)
-end
-
 function SparseArrays.nnz(A::SymmetricBlockMatrix)
     nonzeros = 0
     for offdiagonalid in eachoffdiagonalindex(A)
@@ -149,7 +124,6 @@ function LinearMaps._unsafe_mul!(
     M<:Union{Z,LinearMaps.AdjointMap{T,Z},LinearMaps.TransposeMap{T,Z}},
 }
     y .= zero(eltype(y))
-
     for blockid in eachoffdiagonalindex(A)
         b = offdiagonal(A, blockid)
         @views y[rowindices(b)] += matrix(b) * x[colindices(b)]
@@ -159,20 +133,5 @@ function LinearMaps._unsafe_mul!(
         b = diagonal(A, blockid)
         @inbounds LinearAlgebra.mul!(view(y, rowindices(b)), b, view(x, colindices(b)))
     end
-
-    return y
-end
-
-function LinearMaps._unsafe_mul!(
-    y::AbstractVector, A::M, x::AbstractVector, α, β
-) where {
-    T,
-    Z<:SymmetricBlockMatrix,
-    M<:Union{Z,LinearMaps.AdjointMap{T,Z},LinearMaps.TransposeMap{T,Z}},
-}
-    temp = buffer(A)
-    mul!(temp, A, x)
-    y .= β .* y
-    y .+= α .* temp
     return y
 end
