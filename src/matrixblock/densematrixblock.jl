@@ -13,9 +13,8 @@ end
 function SparseArrays.nnz(
     block::M
 ) where {
-    T,
     A<:DenseMatrixBlock,
-    M<:Union{A,LinearMaps.AdjointMap{T,A},LinearMaps.TransposeMap{T,A}},
+    M<:Union{A,LinearMaps.AdjointMap{<:Any,A},LinearMaps.TransposeMap{<:Any,A}},
 }
     return length(rowindices(block)) * length(colindices(block))
 end

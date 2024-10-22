@@ -67,9 +67,8 @@ end
 function LinearMaps._unsafe_mul!(
     y::AbstractVector, A::M, x::AbstractVector
 ) where {
-    T,
     Z<:BlockSparseMatrix,
-    M<:Union{Z,LinearMaps.AdjointMap{T,Z},LinearMaps.TransposeMap{T,Z}},
+    M<:Union{Z,LinearMaps.AdjointMap{<:Any,Z},LinearMaps.TransposeMap{<:Any,Z}},
 }
     y .= zero(eltype(y))
     for blockid in eachblockindex(A)

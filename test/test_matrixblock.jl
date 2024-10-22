@@ -40,12 +40,19 @@ tdenseblock1 = transpose(denseblock1)
 @test nnz(adenseblock1) == 6
 @test nnz(tdenseblock1) == 6
 
-@test denseblock1 * [1, 0, 0] == block1 * [1, 0, 0]
-@test denseblock1 * [0, 1, 0] == block1 * [0, 1, 0]
-@test denseblock1 * [0, 0, 1] == block1 * [0, 0, 1]
+y = zeros(ComplexF64, 2)
+@test LinearAlgebra.mul!(y, denseblock1, [1, 0, 0]) == block1 * [1, 0, 0]
+y = zeros(ComplexF64, 2)
+@test LinearAlgebra.mul!(y, denseblock1, [0, 1, 0]) == block1 * [0, 1, 0]
+y = zeros(ComplexF64, 2)
+@test LinearAlgebra.mul!(y, denseblock1, [0, 0, 1]) == block1 * [0, 0, 1]
 
-@test adenseblock1 * [1, 0] == adjoint(block1) * [1, 0]
-@test adenseblock1 * [0, 1] == adjoint(block1) * [0, 1]
+y = zeros(ComplexF64, 3)
+@test LinearAlgebra.mul!(y, adenseblock1, [1, 0]) ≈ adjoint(block1) * [1, 0]
+y = zeros(ComplexF64, 3)
+@test LinearAlgebra.mul!(y, adenseblock1, [0, 1]) ≈ adjoint(block1) * [0, 1]
 
-@test tdenseblock1 * [1, 0] == transpose(block1) * [1, 0]
-@test tdenseblock1 * [0, 1] == transpose(block1) * [0, 1]
+y = zeros(ComplexF64, 3)
+@test LinearAlgebra.mul!(y, tdenseblock1, [1, 0]) ≈ transpose(block1) * [1, 0]
+y = zeros(ComplexF64, 3)
+@test LinearAlgebra.mul!(y, tdenseblock1, [0, 1]) ≈ transpose(block1) * [0, 1]

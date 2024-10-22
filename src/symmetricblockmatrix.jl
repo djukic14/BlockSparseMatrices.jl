@@ -108,7 +108,7 @@ end
 function SparseArrays.nnz(A::SymmetricBlockMatrix)
     nonzeros = 0
     for offdiagonalid in eachoffdiagonalindex(A)
-        nonzeros += nnz(offdiagonal(A, offdiagonalid))
+        nonzeros += 2 * nnz(offdiagonal(A, offdiagonalid))
     end
     for diagonalid in eachdiagonalindex(A)
         nonzeros += nnz(diagonal(A, diagonalid))
@@ -119,15 +119,18 @@ end
 function LinearMaps._unsafe_mul!(
     y::AbstractVector, A::M, x::AbstractVector
 ) where {
-    T,
     Z<:SymmetricBlockMatrix,
-    M<:Union{Z,LinearMaps.AdjointMap{T,Z},LinearMaps.TransposeMap{T,Z}},
+    M<:Union{Z,LinearMaps.AdjointMap{<:Any,Z},LinearMaps.TransposeMap{<:Any,Z}},
 }
     y .= zero(eltype(y))
     for blockid in eachoffdiagonalindex(A)
         b = offdiagonal(A, blockid)
-        @views y[rowindices(b)] += matrix(b) * x[colindices(b)]
-        @views y[colindices(b)] += transpose(matrix(b)) * x[rowindices(b)]
+        LinearAlgebra.mul!(
+            view(y, rowindices(b)), matrix(b), view(x, colindices(b)), true, true
+        )
+        LinearAlgebra.mul!(
+            view(y, colindices(b)), transpose(matrix(b)), view(x, rowindices(b)), true, true
+        )
     end
     for blockid in eachdiagonalindex(A)
         b = diagonal(A, blockid)

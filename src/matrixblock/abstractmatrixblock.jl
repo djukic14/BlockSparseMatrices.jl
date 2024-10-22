@@ -29,9 +29,8 @@ end
 function Base.size(
     block::M
 ) where {
-    T,
     A<:AbstractMatrixBlock,
-    M<:Union{A,LinearMaps.AdjointMap{T,A},LinearMaps.TransposeMap{T,A}},
+    M<:Union{A,LinearMaps.AdjointMap{<:Any,A},LinearMaps.TransposeMap{<:Any,A}},
 }
     return (length(rowindices(block)), length(colindices(block)))
 end
@@ -39,9 +38,8 @@ end
 function SparseArrays.nnz(
     block::M
 ) where {
-    T,
     A<:AbstractMatrixBlock,
-    M<:Union{A,LinearMaps.AdjointMap{T,A},LinearMaps.TransposeMap{T,A}},
+    M<:Union{A,LinearMaps.AdjointMap{<:Any,A},LinearMaps.TransposeMap{<:Any,A}},
 }
     return nnz(matrix(block))
 end
@@ -49,9 +47,8 @@ end
 function LinearMaps._unsafe_mul!(
     y::AbstractVector, block::M, x::AbstractVector
 ) where {
-    T,
     A<:AbstractMatrixBlock,
-    M<:Union{A,LinearMaps.AdjointMap{T,A},LinearMaps.TransposeMap{T,A}},
+    M<:Union{A,LinearMaps.AdjointMap{<:Any,A},LinearMaps.TransposeMap{<:Any,A}},
 }
     LinearAlgebra.mul!(y, matrix(block), x, true, true)
 

@@ -36,9 +36,8 @@ end
 function LinearMaps._unsafe_mul!(
     y::AbstractVector, A::M, x::AbstractVector, α, β
 ) where {
-    T,
     Z<:AbstractBlockMatrix,
-    M<:Union{Z,LinearMaps.AdjointMap{T,Z},LinearMaps.TransposeMap{T,Z}},
+    M<:Union{Z,LinearMaps.AdjointMap{<:Any,Z},LinearMaps.TransposeMap{<:Any,Z}},
 }
     temp = buffer(A)
     mul!(temp, A, x)

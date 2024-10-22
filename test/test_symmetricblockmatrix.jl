@@ -29,7 +29,7 @@ diagonalmatrix3 = SymmetricBlockMatrix(
 @test size(transpose(diagonalmatrix), 1) == size(transpose(diagonalmatrix), 2) == 5
 @test size(adjoint(diagonalmatrix)) == (5, 5)
 @test size(adjoint(diagonalmatrix), 1) == size(adjoint(diagonalmatrix), 2) == 5
-@test nnz(diagonalmatrix) == 19
+@test nnz(diagonalmatrix) == 25
 
 x = rand(ComplexF64, 5)
 @test diagonalmatrix * x ≈ M * x
