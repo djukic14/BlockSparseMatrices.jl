@@ -44,6 +44,9 @@ function SymmetricBlockMatrix(
     diagonals::Vector{DM}, offdiagonals::Vector{M}, rows::Int, cols::Int
 ) where {DM,M}
     forwardbuffer, adjointbuffer, buffer = buffers(eltype(M), rows, cols)
+
+    sort!(diagonals; lt=islessinordering)
+    sort!(offdiagonals; lt=islessinordering)
     return SymmetricBlockMatrix{eltype(M),DM,M}(
         diagonals, offdiagonals, (rows, cols), forwardbuffer, adjointbuffer, buffer
     )
@@ -137,4 +140,50 @@ function LinearMaps._unsafe_mul!(
         @inbounds LinearAlgebra.mul!(view(y, rowindices(b)), b, view(x, colindices(b)))
     end
     return y
+end
+
+function Base.getindex(A::SymmetricBlockMatrix, i::Integer, j::Integer)
+    (i > size(A, 1) || j > size(A, 2)) && throw(BoundsError(A, (i, j)))
+    for blockid in eachoffdiagonalindex(A)
+        b = offdiagonal(A, blockid)
+        I = findfirst(isequal(i), rowindices(b))
+        isnothing(I) && continue
+        J = findfirst(isequal(j), colindices(b))
+        isnothing(J) && continue
+        return b.matrix[I, J]
+    end
+
+    for blockid in eachdiagonalindex(A)
+        b = diagonal(A, blockid)
+        I = findfirst(isequal(i), rowindices(b))
+        isnothing(I) && continue
+        J = findfirst(isequal(j), colindices(b))
+        isnothing(J) && continue
+        return b.matrix[I, J]
+    end
+    return zero(eltype(A))
+end
+
+function Base.setindex!(A::SymmetricBlockMatrix, v, i::Integer, j::Integer)
+    (i > size(A, 1) || j > size(A, 2)) && throw(BoundsError(A, (i, j)))
+    for blockid in eachoffdiagonalindex(A)
+        b = offdiagonal(A, blockid)
+        I = findfirst(isequal(i), rowindices(b))
+        isnothing(I) && continue
+        J = findfirst(isequal(j), colindices(b))
+        isnothing(J) && continue
+        b.matrix[I, J] = v
+        return b.matrix[I, J]
+    end
+
+    for blockid in eachdiagonalindex(A)
+        b = diagonal(A, blockid)
+        I = findfirst(isequal(i), rowindices(b))
+        isnothing(I) && continue
+        J = findfirst(isequal(j), colindices(b))
+        isnothing(J) && continue
+        b.matrix[I, J] = v
+        return b.matrix[I, J]
+    end
+    return zero(eltype(A))
 end

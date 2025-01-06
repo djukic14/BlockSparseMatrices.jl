@@ -45,3 +45,31 @@ function LinearMaps._unsafe_mul!(
     y .+= α .* temp
     return y
 end
+
+function Base.getindex(A::AbstractBlockMatrix, i::Integer, j::Integer)
+    (i > size(A, 1) || j > size(A, 2)) && throw(BoundsError(A, (i, j)))
+    for blockid in eachblockindex(A)
+        b = block(A, blockid)
+
+        I = findfirst(isequal(i), rowindices(b))
+        isnothing(I) && continue
+        J = findfirst(isequal(j), colindices(b))
+        isnothing(J) && continue
+        return b.matrix[I, J]
+    end
+    return zero(eltype(A))
+end
+
+function Base.setindex!(A::AbstractBlockMatrix, v, i::Integer, j::Integer)
+    (i > size(A, 1) || j > size(A, 2)) && throw(BoundsError(A, (i, j)))
+    for blockid in eachblockindex(A)
+        b = block(A, blockid)
+        I = findfirst(isequal(i), rowindices(b))
+        isnothing(I) && continue
+        J = findfirst(isequal(j), colindices(b))
+        isnothing(J) && continue
+        b.matrix[I, J] = v
+        return b.matrix[I, J]
+    end
+    return error("Value not found")
+end

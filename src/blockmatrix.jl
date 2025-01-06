@@ -26,6 +26,8 @@ end
 
 function BlockSparseMatrix(blocks::Vector{M}, rows::Int, cols::Int) where {M}
     forwardbuffer, adjointbuffer, buffer = buffers(eltype(M), rows, cols)
+
+    sort!(blocks; lt=islessinordering)
     return BlockSparseMatrix{eltype(M),M}(
         blocks, (rows, cols), forwardbuffer, adjointbuffer, buffer
     )

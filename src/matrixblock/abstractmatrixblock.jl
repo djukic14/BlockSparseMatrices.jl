@@ -86,3 +86,12 @@ end
 function Base.axes(block::AbstractMatrixBlock)
     return (Base.OneTo(maximum(rowindices(block))), Base.OneTo(maximum(colindices(block))))
 end
+
+#TODO: check if this is the correct ordering or if it should be reversed -> benchmark performance
+function islessinordering(blocka::AbstractMatrixBlock, blockb::AbstractMatrixBlock)
+    if maximum(rowindices(blocka)) < maximum(rowindices(blockb))
+        return true
+    else
+        return maximum(colindices(blocka)) < maximum(colindices(blockb))
+    end
+end
