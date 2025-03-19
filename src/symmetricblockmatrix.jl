@@ -1,10 +1,14 @@
-struct SymmetricBlockMatrix{T,DM,M} <: AbstractBlockMatrix{T}
+struct SymmetricBlockMatrix{T,DM,M,D} <: AbstractBlockMatrix{T}
     diagonals::Vector{DM}
     offdiagonals::Vector{M}
     size::Tuple{Int,Int}
     forwardbuffer::Vector{T}
     adjointbuffer::Vector{T}
     buffer::Vector{T}
+    diagonalsrowindexdict::D
+    diagonalscolindexdict::D
+    offdiagonalsrowindexdict::D
+    offdiagonalscolindexdict::D
 end
 
 function SymmetricBlockMatrix(
@@ -47,8 +51,32 @@ function SymmetricBlockMatrix(
 
     sort!(diagonals; lt=islessinordering)
     sort!(offdiagonals; lt=islessinordering)
-    return SymmetricBlockMatrix{eltype(M),DM,M}(
-        diagonals, offdiagonals, (rows, cols), forwardbuffer, adjointbuffer, buffer
+
+    diagonalsrowindexdict = Dict{Int,Vector{Int}}()
+    diagonalscolindexdict = Dict{Int,Vector{Int}}()
+    for (i, block) in enumerate(diagonals)
+        _appendindexdict!(diagonalsrowindexdict, block.rowindices, i)
+        _appendindexdict!(diagonalscolindexdict, block.colindices, i)
+    end
+
+    offdiagonalsrowindexdict = Dict{Int,Vector{Int}}()
+    offdiagonalscolindexdict = Dict{Int,Vector{Int}}()
+    for (i, block) in enumerate(offdiagonals)
+        _appendindexdict!(offdiagonalsrowindexdict, block.rowindices, i)
+        _appendindexdict!(offdiagonalscolindexdict, block.colindices, i)
+    end
+
+    return SymmetricBlockMatrix{eltype(M),DM,M,typeof(diagonalsrowindexdict)}(
+        diagonals,
+        offdiagonals,
+        (rows, cols),
+        forwardbuffer,
+        adjointbuffer,
+        buffer,
+        diagonalsrowindexdict,
+        diagonalscolindexdict,
+        offdiagonalsrowindexdict,
+        offdiagonalscolindexdict,
     )
 end
 
@@ -119,6 +147,26 @@ function SparseArrays.nnz(A::SymmetricBlockMatrix)
     return nonzeros
 end
 
+function diagonalrowindices(A::SymmetricBlockMatrix, i::Integer)
+    !haskey(A.diagonalsrowindexdict, i) && return Int[]
+    return A.diagonalsrowindexdict[i]
+end
+
+function diagonalcolindices(A::SymmetricBlockMatrix, j::Integer)
+    !haskey(A.diagonalscolindexdict, j) && return Int[]
+    return A.diagonalscolindexdict[j]
+end
+
+function offdiagonalrowindices(A::SymmetricBlockMatrix, i::Integer)
+    !haskey(A.offdiagonalsrowindexdict, i) && return Int[]
+    return A.offdiagonalsrowindexdict[i]
+end
+
+function offdiagonalcolindices(A::SymmetricBlockMatrix, j::Integer)
+    !haskey(A.offdiagonalscolindexdict, j) && return Int[]
+    return A.offdiagonalscolindexdict[j]
+end
+
 function LinearMaps._unsafe_mul!(
     y::AbstractVector, A::M, x::AbstractVector
 ) where {
@@ -144,8 +192,18 @@ end
 
 function Base.getindex(A::SymmetricBlockMatrix, i::Integer, j::Integer)
     (i > size(A, 1) || j > size(A, 2)) && throw(BoundsError(A, (i, j)))
-    for blockid in eachoffdiagonalindex(A)
-        b = offdiagonal(A, blockid)
+
+    Aij = _getindex(A, i, j)
+    !isnothing(Aij) && return Aij
+    Aji = _getindex(A, j, i)
+    !isnothing(Aji) && return Aji
+    return zero(eltype(A))
+end
+
+function _getindex(A::SymmetricBlockMatrix, i::Integer, j::Integer)
+    for rowblockid in diagonalrowindices(A, i)
+        rowblockid ∉ diagonalcolindices(A, j) && continue
+        b = diagonal(A, rowblockid)
         I = findfirst(isequal(i), rowindices(b))
         isnothing(I) && continue
         J = findfirst(isequal(j), colindices(b))
@@ -153,31 +211,44 @@ function Base.getindex(A::SymmetricBlockMatrix, i::Integer, j::Integer)
         return b.matrix[I, J]
     end
 
-    for blockid in eachdiagonalindex(A)
-        b = diagonal(A, blockid)
+    for rowblockid in offdiagonalrowindices(A, i)
+        rowblockid ∉ offdiagonalcolindices(A, j) && continue
+        b = offdiagonal(A, rowblockid)
         I = findfirst(isequal(i), rowindices(b))
         isnothing(I) && continue
         J = findfirst(isequal(j), colindices(b))
         isnothing(J) && continue
         return b.matrix[I, J]
     end
-    return zero(eltype(A))
+    return nothing
 end
 
 function Base.setindex!(A::SymmetricBlockMatrix, v, i::Integer, j::Integer)
     (i > size(A, 1) || j > size(A, 2)) && throw(BoundsError(A, (i, j)))
-    for blockid in eachoffdiagonalindex(A)
-        b = offdiagonal(A, blockid)
+    for rowblockid in diagonalrowindices(A, i)
+        rowblockid ∉ diagonalcolindices(A, j) && continue
+        b = diagonal(A, rowblockid)
         I = findfirst(isequal(i), rowindices(b))
         isnothing(I) && continue
         J = findfirst(isequal(j), colindices(b))
         isnothing(J) && continue
         b.matrix[I, J] = v
+        b.matrix[J, I] = v
         return b.matrix[I, J]
     end
 
-    for blockid in eachdiagonalindex(A)
-        b = diagonal(A, blockid)
+    A_ij = _setoffdiagonal!(A, v, i, j)
+    !isnothing(A_ij) && return A_ij
+    A_ji = _setoffdiagonal!(A, v, j, i)
+    !isnothing(A_ji) && return A_ji
+
+    return error("Value not found")
+end
+
+function _setoffdiagonal!(A::SymmetricBlockMatrix, v, i, j)
+    for rowblockid in offdiagonalrowindices(A, i)
+        rowblockid ∉ offdiagonalcolindices(A, j) && continue
+        b = offdiagonal(A, rowblockid)
         I = findfirst(isequal(i), rowindices(b))
         isnothing(I) && continue
         J = findfirst(isequal(j), colindices(b))
@@ -185,5 +256,5 @@ function Base.setindex!(A::SymmetricBlockMatrix, v, i::Integer, j::Integer)
         b.matrix[I, J] = v
         return b.matrix[I, J]
     end
-    return zero(eltype(A))
+    return nothing
 end

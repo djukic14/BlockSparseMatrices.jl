@@ -1,9 +1,11 @@
-struct BlockSparseMatrix{T,M} <: AbstractBlockMatrix{T}
+struct BlockSparseMatrix{T,M,D} <: AbstractBlockMatrix{T}
     blocks::Vector{M}
     size::Tuple{Int,Int}
     forwardbuffer::Vector{T}
     adjointbuffer::Vector{T}
     buffer::Vector{T}
+    rowindexdict::D
+    colindexdict::D
 end
 
 function BlockSparseMatrix(
@@ -28,8 +30,23 @@ function BlockSparseMatrix(blocks::Vector{M}, rows::Int, cols::Int) where {M}
     forwardbuffer, adjointbuffer, buffer = buffers(eltype(M), rows, cols)
 
     sort!(blocks; lt=islessinordering)
-    return BlockSparseMatrix{eltype(M),M}(
-        blocks, (rows, cols), forwardbuffer, adjointbuffer, buffer
+
+    rowindexdict = Dict{Int,Vector{Int}}()
+    colindexdict = Dict{Int,Vector{Int}}()
+
+    for (i, block) in enumerate(blocks)
+        _appendindexdict!(rowindexdict, block.rowindices, i)
+        _appendindexdict!(colindexdict, block.colindices, i)
+    end
+
+    return BlockSparseMatrix{eltype(M),M,typeof(rowindexdict)}(
+        blocks,
+        (rows, cols),
+        forwardbuffer,
+        adjointbuffer,
+        buffer,
+        rowindexdict,
+        colindexdict,
     )
 end
 
@@ -78,4 +95,12 @@ function LinearMaps._unsafe_mul!(
         @inbounds LinearAlgebra.mul!(view(y, rowindices(b)), b, view(x, colindices(b)))
     end
     return y
+end
+
+function _appendindexdict!(dict, indices, blockid)
+    for index in indices
+        !haskey(dict, index) && (dict[index] = [])
+        push!(dict[index], blockid)
+    end
+    return dict
 end

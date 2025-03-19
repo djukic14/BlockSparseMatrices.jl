@@ -46,11 +46,20 @@ function LinearMaps._unsafe_mul!(
     return y
 end
 
+function rowblockids(A::AbstractBlockMatrix, i::Integer)
+    return A.rowindexdict[i]
+end
+
+function colblockids(A::AbstractBlockMatrix, j::Integer)
+    return A.colindexdict[j]
+end
+
 function Base.getindex(A::AbstractBlockMatrix, i::Integer, j::Integer)
     (i > size(A, 1) || j > size(A, 2)) && throw(BoundsError(A, (i, j)))
-    for blockid in eachblockindex(A)
-        b = block(A, blockid)
 
+    for rowblockid in rowblockids(A, i)
+        rowblockid ∉ colblockids(A, j) && continue
+        b = block(A, rowblockid)
         I = findfirst(isequal(i), rowindices(b))
         isnothing(I) && continue
         J = findfirst(isequal(j), colindices(b))
@@ -62,8 +71,10 @@ end
 
 function Base.setindex!(A::AbstractBlockMatrix, v, i::Integer, j::Integer)
     (i > size(A, 1) || j > size(A, 2)) && throw(BoundsError(A, (i, j)))
-    for blockid in eachblockindex(A)
-        b = block(A, blockid)
+
+    for rowblockid in rowblockids(A, i)
+        rowblockid ∉ colblockids(A, j) && continue
+        b = block(A, rowblockid)
         I = findfirst(isequal(i), rowindices(b))
         isnothing(I) && continue
         J = findfirst(isequal(j), colindices(b))
