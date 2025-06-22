@@ -95,3 +95,62 @@ function islessinordering(blocka::AbstractMatrixBlock, blockb::AbstractMatrixBlo
         return maximum(colindices(blocka)) < maximum(colindices(blockb))
     end
 end
+
+struct isthreadsafe end
+struct issymthreadsafe
+    isthreadsafe::isthreadsafe
+end
+issymthreadsafe() = issymthreadsafe(isthreadsafe())
+
+function (ists::issymthreadsafe)(blocka, blockb)
+    return ists.isthreadsafe(blocka, blockb) &&
+           ists.isthreadsafe(transpose(blocka), blockb) &&
+           ists.isthreadsafe(blocka, transpose(blockb))
+end
+
+function (::isthreadsafe)(blocka, blockb)
+    if size(blocka, 1) >= size(blockb, 1)
+        issubset(rowindices(blockb), rowindices(blocka)) && (return false)
+
+        if size(blocka, 2) >= size(blockb, 2)
+            return !issubset(colindices(blockb), colindices(blocka))
+        else
+            return !issubset(colindices(blocka), colindices(blockb))
+        end
+    else
+        issubset(rowindices(blocka), rowindices(blockb)) && (return false)
+
+        if size(blocka, 2) >= size(blockb, 2)
+            return !issubset(colindices(blockb), colindices(blocka))
+        else
+            return !issubset(colindices(blocka), colindices(blockb))
+        end
+    end
+end
+
+function findcolor!(
+    blockid::Int,
+    threadsafecolors::AbstractArray,
+    blocks::Vector{M};
+    threadsafecheck=isthreadsafe(),
+    color=1,
+) where {M}
+    #This case should not appear, it is a rescue measure
+    (length(threadsafecolors) < color) && return push!(threadsafecolors, [blockid])
+
+    for testblockid in threadsafecolors[color]
+        if threadsafecheck(blocks[testblockid], blocks[blockid])
+            return push!(threadsafecolors[color], blockid)
+        else
+            return findcolor!(
+                blockid,
+                threadsafecolors,
+                blocks;
+                threadsafecheck=threadsafecheck,
+                color=color + 1,
+            )
+        end
+    end
+
+    return push!(threadsafecolors[color], blockid)
+end

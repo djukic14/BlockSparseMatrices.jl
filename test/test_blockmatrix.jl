@@ -14,12 +14,24 @@ block1 = BlockSparseMatrices.DenseMatrixBlock(mat1, 1:2, 1:2)
 block2 = BlockSparseMatrices.DenseMatrixBlock(mat2, 3:5, 3:5)
 block3 = BlockSparseMatrices.DenseMatrixBlock(mat3, 1:2, 3:5)
 block4 = BlockSparseMatrices.DenseMatrixBlock(mat4, 3:5, 1:2)
+block5 = BlockSparseMatrices.DenseMatrixBlock(mat1, 6:7, 6:7)
+
+@test BlockSparseMatrices.isthreadsafe()(block1, block2)
+@test BlockSparseMatrices.isthreadsafe()(block2, block1)
+@test BlockSparseMatrices.isthreadsafe()(block3, block4)
+@test BlockSparseMatrices.isthreadsafe()(block4, block3)
+@test !BlockSparseMatrices.isthreadsafe()(block1, block3)
+@test !BlockSparseMatrices.isthreadsafe()(block3, block1)
+@test !BlockSparseMatrices.isthreadsafe()(block1, block4)
+@test !BlockSparseMatrices.isthreadsafe()(block4, block1)
 
 blockmatrix = BlockSparseMatrix([block1, block2, block3, block4], 5, 5)
 blockmatrix2 = BlockSparseMatrix([block1, block2, block3, block4], (5, 5))
 blockmatrix3 = BlockSparseMatrix(
     [mat1, mat2, mat3, mat4], [1:2, 3:5, 1:2, 3:5], [1:2, 3:5, 3:5, 1:2], (5, 5)
 )
+blockmatrix4 = BlockSparseMatrix([block1, block2, block5], 7, 7)
+@test length(blockmatrix4.threadsafecolors) == 2
 
 @test blockmatrix.blocks == blockmatrix2.blocks == blockmatrix3.blocks
 

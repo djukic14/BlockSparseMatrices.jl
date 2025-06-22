@@ -2,6 +2,7 @@ module BlockSparseMatrices
 using LinearAlgebra
 using SparseArrays
 using LinearMaps
+using OhMyThreads
 
 include("abstractblockmatrix.jl")
 include("matrixblock/abstractmatrixblock.jl")

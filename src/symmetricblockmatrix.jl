@@ -9,6 +9,8 @@ struct SymmetricBlockMatrix{T,DM,M,D} <: AbstractBlockMatrix{T}
     diagonalscolindexdict::D
     offdiagonalsrowindexdict::D
     offdiagonalscolindexdict::D
+    threadsafecolors::Vector{Vector{Int}}
+    ntasks::Int
 end
 
 function SymmetricBlockMatrix(
@@ -18,7 +20,8 @@ function SymmetricBlockMatrix(
     offdiagonals::Vector{M},
     rowidcs::V,
     colidcs::V,
-    size::Tuple{Int,Int},
+    size::Tuple{Int,Int};
+    ntasks=1,
 ) where {DM,M,V}
     offdiagonalblocks = Vector{DenseMatrixBlock{eltype(M),M,eltype(rowidcs)}}(
         undef, length(offdiagonals)
@@ -35,17 +38,17 @@ function SymmetricBlockMatrix(
         diagonalblocks[i] = DenseMatrixBlock(diagonals[i], drowidcs[i], dcolidcs[i])
     end
 
-    return SymmetricBlockMatrix(diagonalblocks, offdiagonalblocks, size)
+    return SymmetricBlockMatrix(diagonalblocks, offdiagonalblocks, size; ntasks=ntasks)
 end
 
 function SymmetricBlockMatrix(
-    diagonals::Vector{DM}, offdiagonals::Vector{M}, size::Tuple{Int,Int}
+    diagonals::Vector{DM}, offdiagonals::Vector{M}, size::Tuple{Int,Int}; ntasks=1
 ) where {DM,M}
-    return SymmetricBlockMatrix(diagonals, offdiagonals, size[1], size[2])
+    return SymmetricBlockMatrix(diagonals, offdiagonals, size[1], size[2]; ntasks=ntasks)
 end
 
 function SymmetricBlockMatrix(
-    diagonals::Vector{DM}, offdiagonals::Vector{M}, rows::Int, cols::Int
+    diagonals::Vector{DM}, offdiagonals::Vector{M}, rows::Int, cols::Int; ntasks=1
 ) where {DM,M}
     forwardbuffer, adjointbuffer, buffer = buffers(eltype(M), rows, cols)
 
@@ -66,6 +69,27 @@ function SymmetricBlockMatrix(
         _appendindexdict!(offdiagonalscolindexdict, block.colindices, i)
     end
 
+    if offdiagonals != M[]
+        threadsafecolors = [
+            Int[] for _ in
+            1:(2 * (maximum(length.(values(offdiagonalsrowindexdict))) + maximum(
+                length.(values(offdiagonalscolindexdict))
+            )))
+        ]
+    else
+        threadsafecolors = Vector{Int}[]
+    end
+    colorperm = Vector(1:length(threadsafecolors))
+    for i in eachindex(offdiagonals)
+        findcolor!(
+            i,
+            view(threadsafecolors, colorperm),
+            offdiagonals;
+            threadsafecheck=issymthreadsafe(),
+        )
+        sortperm!(colorperm, length.(threadsafecolors))
+    end
+
     return SymmetricBlockMatrix{eltype(M),DM,M,typeof(diagonalsrowindexdict)}(
         diagonals,
         offdiagonals,
@@ -77,6 +101,8 @@ function SymmetricBlockMatrix(
         diagonalscolindexdict,
         offdiagonalsrowindexdict,
         offdiagonalscolindexdict,
+        threadsafecolors,
+        ntasks,
     )
 end
 
@@ -116,6 +142,8 @@ function diagonal(A::SymmetricBlockMatrix, i)
     return A.diagonals[i]
 end
 
+ntasks(A::SymmetricBlockMatrix) = A.ntasks
+
 function offdiagonal(
     A::M, i
 ) where {Z<:SymmetricBlockMatrix,T,M<:LinearMaps.AdjointMap{T,Z}}
@@ -124,6 +152,15 @@ end
 
 function diagonal(A::M, i) where {Z<:SymmetricBlockMatrix,T,M<:LinearMaps.AdjointMap{T,Z}}
     return adjoint(diagonal(A.lmap, i))
+end
+
+function ntasks(
+    A::M
+) where {
+    Z<:SymmetricBlockMatrix,
+    M<:Union{Z,LinearMaps.AdjointMap{<:Any,Z},LinearMaps.TransposeMap{<:Any,Z}},
+}
+    return ntasks(A.lmap)
 end
 
 function offdiagonal(
@@ -167,6 +204,18 @@ function offdiagonalcolindices(A::SymmetricBlockMatrix, j::Integer)
     return A.offdiagonalscolindexdict[j]
 end
 
+threadsafecolors(A::SymmetricBlockMatrix) = A.threadsafecolors
+
+function threadsafecolors(
+    A::M
+) where {
+    Z<:SymmetricBlockMatrix,
+    T,
+    M<:Union{LinearMaps.AdjointMap{T,Z},LinearMaps.TransposeMap{T,Z}},
+}
+    return threadsafecolors(A.lmap)
+end
+
 function LinearMaps._unsafe_mul!(
     y::AbstractVector, A::M, x::AbstractVector
 ) where {
@@ -174,16 +223,24 @@ function LinearMaps._unsafe_mul!(
     M<:Union{Z,LinearMaps.AdjointMap{<:Any,Z},LinearMaps.TransposeMap{<:Any,Z}},
 }
     y .= zero(eltype(y))
-    for blockid in eachoffdiagonalindex(A)
-        b = offdiagonal(A, blockid)
-        LinearAlgebra.mul!(
-            view(y, rowindices(b)), matrix(b), view(x, colindices(b)), true, true
-        )
-        LinearAlgebra.mul!(
-            view(y, colindices(b)), transpose(matrix(b)), view(x, rowindices(b)), true, true
-        )
+    for color in threadsafecolors(A)
+        @tasks for blockid in color
+            @set ntasks = ntasks(A)
+            b = offdiagonal(A, blockid)
+            LinearAlgebra.mul!(
+                view(y, rowindices(b)), matrix(b), view(x, colindices(b)), true, true
+            )
+            LinearAlgebra.mul!(
+                view(y, colindices(b)),
+                transpose(matrix(b)),
+                view(x, rowindices(b)),
+                true,
+                true,
+            )
+        end
     end
-    for blockid in eachdiagonalindex(A)
+    @tasks for blockid in eachdiagonalindex(A)
+        @set ntasks = ntasks(A)
         b = diagonal(A, blockid)
         @inbounds LinearAlgebra.mul!(view(y, rowindices(b)), b, view(x, colindices(b)))
     end
