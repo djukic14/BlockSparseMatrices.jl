@@ -6,10 +6,12 @@ struct BlockSparseMatrix{T,M,D} <: AbstractBlockMatrix{T}
     buffer::Vector{T}
     rowindexdict::D
     colindexdict::D
+    threadsafecolors::Vector{Vector{Int}}
+    ntasks::Int
 end
 
 function BlockSparseMatrix(
-    blocks::Vector{M}, rowindices::V, colindices::V, size::Tuple{Int,Int}
+    blocks::Vector{M}, rowindices::V, colindices::V, size::Tuple{Int,Int}; ntasks=1
 ) where {M,V}
     denseblockmatrices = Vector{DenseMatrixBlock{eltype(M),M,eltype(rowindices)}}(
         undef, length(blocks)
@@ -19,14 +21,14 @@ function BlockSparseMatrix(
         denseblockmatrices[i] = DenseMatrixBlock(blocks[i], rowindices[i], colindices[i])
     end
 
-    return BlockSparseMatrix(denseblockmatrices, size)
+    return BlockSparseMatrix(denseblockmatrices, size; ntasks=ntasks)
 end
 
-function BlockSparseMatrix(blocks::Vector{M}, size::Tuple{Int,Int}) where {M}
-    return BlockSparseMatrix(blocks, size[1], size[2])
+function BlockSparseMatrix(blocks::Vector{M}, size::Tuple{Int,Int}; ntasks=1) where {M}
+    return BlockSparseMatrix(blocks, size[1], size[2]; ntasks=ntasks)
 end
 
-function BlockSparseMatrix(blocks::Vector{M}, rows::Int, cols::Int) where {M}
+function BlockSparseMatrix(blocks::Vector{M}, rows::Int, cols::Int; ntasks=1) where {M}
     forwardbuffer, adjointbuffer, buffer = buffers(eltype(M), rows, cols)
 
     sort!(blocks; lt=islessinordering)
@@ -39,6 +41,23 @@ function BlockSparseMatrix(blocks::Vector{M}, rows::Int, cols::Int) where {M}
         _appendindexdict!(colindexdict, block.colindices, i)
     end
 
+    #TODO: Pessimistic choice -> check performance
+    if blocks != M[]
+        threadsafecolors = [
+            Int[] for _ in
+            1:(maximum(length.(values(rowindexdict))) + maximum(
+                length.(values(colindexdict))
+            ))
+        ]
+    else
+        threadsafecolors = Vector{Int}[]
+    end
+    colorperm = Vector(1:length(threadsafecolors))
+    for i in eachindex(blocks)
+        findcolor!(i, view(threadsafecolors, colorperm), blocks)
+        sortperm!(colorperm, length.(threadsafecolors))
+    end
+
     return BlockSparseMatrix{eltype(M),M,typeof(rowindexdict)}(
         blocks,
         (rows, cols),
@@ -47,6 +66,8 @@ function BlockSparseMatrix(blocks::Vector{M}, rows::Int, cols::Int) where {M}
         buffer,
         rowindexdict,
         colindexdict,
+        threadsafecolors,
+        ntasks,
     )
 end
 
@@ -74,6 +95,26 @@ function block(A::M, i) where {Z<:BlockSparseMatrix,T,M<:LinearMaps.TransposeMap
     return transpose(block(A.lmap, i))
 end
 
+ntasks(A::BlockSparseMatrix) = A.ntasks
+
+function ntasks(
+    A::M
+) where {
+    Z<:BlockSparseMatrix,T,M<:Union{LinearMaps.AdjointMap{T,Z},LinearMaps.TransposeMap{T,Z}}
+}
+    return ntasks(A.lmap)
+end
+
+threadsafecolors(A::BlockSparseMatrix) = A.threadsafecolors
+
+function threadsafecolors(
+    A::M
+) where {
+    Z<:BlockSparseMatrix,T,M<:Union{LinearMaps.AdjointMap{T,Z},LinearMaps.TransposeMap{T,Z}}
+}
+    return threadsafecolors(A.lmap)
+end
+
 function SparseArrays.nnz(A::BlockSparseMatrix)
     nonzeros = 0
     for blockid in eachblockindex(A)
@@ -90,10 +131,14 @@ function LinearMaps._unsafe_mul!(
     M<:Union{Z,LinearMaps.AdjointMap{<:Any,Z},LinearMaps.TransposeMap{<:Any,Z}},
 }
     y .= zero(eltype(y))
-    for blockid in eachblockindex(A)
-        b = block(A, blockid)
-        @inbounds LinearAlgebra.mul!(view(y, rowindices(b)), b, view(x, colindices(b)))
+    for color in threadsafecolors(A)
+        @tasks for blockid in color
+            @set ntasks = ntasks(A)
+            b = block(A, blockid)
+            @inbounds LinearAlgebra.mul!(view(y, rowindices(b)), b, view(x, colindices(b)))
+        end
     end
+
     return y
 end
 

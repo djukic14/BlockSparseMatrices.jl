@@ -51,3 +51,29 @@ LinearAlgebra.mul!(x2, adjoint(M), x, α, β)
 LinearAlgebra.mul!(x1, transpose(diagonalmatrix), x, α, β)
 LinearAlgebra.mul!(x2, transpose(M), x, α, β)
 @test x1 ≈ x2
+
+# check threadsafecolors
+block1 = randn(ComplexF64, 2, 2)
+block2 = randn(ComplexF64, 2, 2)
+block3 = randn(ComplexF64, 2, 2)
+
+M = [
+    zeros(2, 2) transpose(block1) transpose(block2)
+    block1 zeros(2, 2) transpose(block2)
+    block2 block3 zeros(2, 2)
+]
+
+od1 = BlockSparseMatrices.DenseMatrixBlock(block1, 3:4, 1:2)
+od2 = BlockSparseMatrices.DenseMatrixBlock(block2, 5:6, 1:2)
+od3 = BlockSparseMatrices.DenseMatrixBlock(block2, 5:6, 3:4)
+
+diagonalmatrix = SymmetricBlockMatrix([], [od1, od2, od3], 6, 6)
+
+@test !BlockSparseMatrices.issymthreadsafe()(od1, od2)
+@test !BlockSparseMatrices.issymthreadsafe()(od2, od1)
+@test !BlockSparseMatrices.issymthreadsafe()(od1, od3)
+@test !BlockSparseMatrices.issymthreadsafe()(od3, od1)
+@test BlockSparseMatrices.isthreadsafe()(od1, od3)
+@test BlockSparseMatrices.isthreadsafe()(od3, od1)
+@test !BlockSparseMatrices.issymthreadsafe()(od2, od3)
+@test !BlockSparseMatrices.issymthreadsafe()(od3, od2)
