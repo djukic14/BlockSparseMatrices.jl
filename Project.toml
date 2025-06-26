@@ -10,9 +10,9 @@ OhMyThreads = "67456a42-1dca-4109-a031-0a68de7e3ad5"
 SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
 
 [compat]
-julia = "1"
 LinearMaps = "3"
 OhMyThreads = "0.8.3"
+julia = "1"
 
 [extras]
 Aqua = "4c88cf16-eb10-579e-8560-4a9242c79595"

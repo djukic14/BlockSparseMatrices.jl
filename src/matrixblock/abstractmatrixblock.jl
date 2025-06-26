@@ -88,6 +88,11 @@ function Base.axes(block::AbstractMatrixBlock)
 end
 
 #TODO: check if this is the correct ordering or if it should be reversed -> benchmark performance
+"""
+    islessinordering(blocka::AbstractMatrixBlock, blockb::AbstractMatrixBlock)
+
+Sorting rule for `AbstractMatrixBlock` objects
+"""
 function islessinordering(blocka::AbstractMatrixBlock, blockb::AbstractMatrixBlock)
     if maximum(rowindices(blocka)) < maximum(rowindices(blockb))
         return true
@@ -100,8 +105,14 @@ struct isthreadsafe end
 struct issymthreadsafe
     isthreadsafe::isthreadsafe
 end
+
 issymthreadsafe() = issymthreadsafe(isthreadsafe())
 
+"""
+    (ists::issymthreadsafe)(blocka, blockb)
+
+Functor to test if two `AbstractMatrixBlock` objects allow a threadsave matrix-vector product.
+"""
 function (ists::issymthreadsafe)(blocka, blockb)
     return ists.isthreadsafe(blocka, blockb) &&
            ists.isthreadsafe(transpose(blocka), blockb) &&
@@ -128,6 +139,24 @@ function (::isthreadsafe)(blocka, blockb)
     end
 end
 
+"""
+    findcolor!(
+        blockid::Int,
+        threadsafecolors::AbstractArray,
+        blocks::Vector{M};
+        threadsafecheck=isthreadsafe(),
+        color=1,
+    ) where {M}
+
+Assigns recursively threadsafe color to the dense block with index `blockid`.
+
+# Arguments
+- `blockid::Int`: Index of block.
+- `threadsafecolors::AbstractArray`: Contains assigned blocks.
+- `blocks::Vector{M}`: Vector with all blocks.
+- `threadsafecheck=isthreadsafe()`: Threadsafe check, differs between symmetric and non-symmetric matrix.
+- `color=1`: Currently tested color, increased if block does not fit in color.
+"""
 function findcolor!(
     blockid::Int,
     threadsafecolors::AbstractArray,

@@ -30,6 +30,12 @@ diagonalmatrix3 = SymmetricBlockMatrix(
 @test size(adjoint(diagonalmatrix)) == (5, 5)
 @test size(adjoint(diagonalmatrix), 1) == size(adjoint(diagonalmatrix), 2) == 5
 @test nnz(diagonalmatrix) == 25
+@test diagonalmatrix[1, 1] == block1[1, 1]
+@test diagonalmatrix[3, 3] == block2[1, 1]
+@test diagonalmatrix[1, 3] == block3[1, 1]
+@test diagonalmatrix[3, 1] == block3[1, 1]
+@test BlockSparseMatrices.eachoffdiagonalindex(diagonalmatrix) ==
+    BlockSparseMatrices.eachoffdiagonalindex(transpose(diagonalmatrix))
 
 x = rand(ComplexF64, 5)
 @test diagonalmatrix * x ≈ M * x
@@ -51,6 +57,13 @@ LinearAlgebra.mul!(x2, adjoint(M), x, α, β)
 LinearAlgebra.mul!(x1, transpose(diagonalmatrix), x, α, β)
 LinearAlgebra.mul!(x2, transpose(M), x, α, β)
 @test x1 ≈ x2
+
+diagonalmatrix[1, 1] = 1+im*2
+@test diagonalmatrix[1, 1] == 1+im*2
+diagonalmatrix[1, 3] = 1+im*2
+@test diagonalmatrix[1, 3] == 1+im*2
+diagonalmatrix[3, 1] = 2+im*1
+@test diagonalmatrix[3, 1] == 2+im*1
 
 # check threadsafecolors
 block1 = randn(ComplexF64, 2, 2)

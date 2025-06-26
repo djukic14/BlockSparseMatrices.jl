@@ -1,3 +1,13 @@
+"""
+    DenseMatrixBlock{T,M,RC} <: AbstractMatrixBlock{T}
+
+Dense block in a sparse blockmatrix.
+
+# Fields
+- `matrix::M`: Matrix.
+- `rowindices::RC`: Global row indices.
+- `colindices::RC`: Global column indices.
+"""
 struct DenseMatrixBlock{T,M,RC} <: AbstractMatrixBlock{T}
     matrix::M
     rowindices::RC
