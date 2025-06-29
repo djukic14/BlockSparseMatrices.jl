@@ -108,11 +108,6 @@ end
 
 issymthreadsafe() = issymthreadsafe(isthreadsafe())
 
-"""
-    (ists::issymthreadsafe)(blocka, blockb)
-
-Functor to test if two `AbstractMatrixBlock` objects allow a threadsave matrix-vector product.
-"""
 function (ists::issymthreadsafe)(blocka, blockb)
     return ists.isthreadsafe(blocka, blockb) &&
            ists.isthreadsafe(transpose(blocka), blockb) &&
