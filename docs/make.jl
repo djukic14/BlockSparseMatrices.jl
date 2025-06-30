@@ -26,6 +26,8 @@ makedocs(;
 deploydocs(;
     repo="github.com/djukic14/BlockSparseMatrices.jl",
     target="build",
-    #devbranch="dev",
-    versions=["stable" => "v^"],#=, "dev" => "dev"=#
+    devbranch="main",
+    push_preview=true,
+    forcepush=true,
+    versions=["stable" => "v^", "dev" => "dev"],
 )
