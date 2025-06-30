@@ -1,7 +1,7 @@
 name = "BlockSparseMatrices"
 uuid = "1ef78180-cc57-4e70-b6ec-c3e471307147"
 authors = ["djukic14 <danijel.jukic14@gmail.com> and contributors"]
-version = "0.0.1"
+version = "0.1.0"
 
 [deps]
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
