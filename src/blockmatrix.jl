@@ -68,9 +68,10 @@ function BlockSparseMatrix(blocks::Vector{M}, rows::Int, cols::Int; ntasks=1) wh
     else
         threadsafecolors = Vector{Int}[]
     end
+
     colorperm = Vector(1:length(threadsafecolors))
     for i in eachindex(blocks)
-        findcolor!(i, view(threadsafecolors, colorperm), blocks)
+        findcolor!(i, threadsafecolors[colorperm], blocks)
         sortperm!(colorperm, length.(threadsafecolors))
     end
 
