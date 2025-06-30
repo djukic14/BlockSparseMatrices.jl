@@ -14,7 +14,18 @@ makedocs(;
         edit_link="main",
         assets=String[],
     ),
-    pages=["Home" => "index.md"],
+    pages=[
+        "Introduction" => "index.md",
+        "Manual" => "manual.md",
+        "Further Details" => "details.md",
+        "Contributing" => "contributing.md",
+        "API Reference" => "apiref.md",
+    ],
 )
 
-deploydocs(; repo="github.com/djukic14/BlockSparseMatrices.jl", devbranch="main")
+deploydocs(;
+    repo="github.com/djukic14/BlockSparseMatrices.jl",
+    target="build",
+    #devbranch="dev",
+    versions=["stable" => "v^"],#=, "dev" => "dev"=#
+)

@@ -1,3 +1,19 @@
+"""
+    struct BlockSparseMatrix{T,M,D} <: AbstractBlockMatrix{T}
+
+Sparse block matrix.
+
+# Fields
+- `blocks::Vector{M}`: Dense blocks.
+- `size::Tuple{Int,Int}`: Size of the matrix.
+- `forwardbuffer::Vector{T}`: ???.
+- `adjointbuffer::Vector{T}`: ???.
+- `buffer::Vector{T}`: ???.
+- `rowindexdict::D`: Global rowindices of dense blocks.
+- `colindexdict::D`: Global columnindices of dense blocks.
+- `threadsafecolors::Vector{Vector{Int}}`: Coloring of dense blocks for multithreaded matrix-vector product.
+- `ntasks::Int`: Threads used for the matrix Vector product.
+"""
 struct BlockSparseMatrix{T,M,D} <: AbstractBlockMatrix{T}
     blocks::Vector{M}
     size::Tuple{Int,Int}

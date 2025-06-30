@@ -1,3 +1,22 @@
+"""
+    SymmetricBlockMatrix{T,DM,M,D} <: AbstractBlockMatrix{T}
+
+Symmetric sparse block matrix.
+
+# Fields
+- `diagonals::Vector{DM}`: Dense blocks on the diagonal of the matrix.
+- `offdiagonals::Vector{M}`: Dense blocks not on the diagonal.
+- `size::Tuple{Int,Int}`: Size of the matrix.
+- `forwardbuffer::Vector{T}`: ???.
+- `adjointbuffer::Vector{T}`: ???.
+- `buffer::Vector{T}`: ???.
+- `diagonalrowindexdict::D`: Global rowindices of diagonal dense blocks.
+- `diagonalcolindexdict::D`: Global columnindices of offdiagonal dense blocks.
+- `offdiagonalrowindexdict::D`: Global rowindices of diagonal dense blocks.
+- `offdiagonalcolindexdict::D`: Global columnindices of offdiagonal dense blocks.
+- `threadsafecolors::Vector{Vector{Int}}`: Coloring of dense blocks for multithreaded matrix-vector product.
+- `ntasks::Int`: Threads used for the matrix Vector product.
+"""
 struct SymmetricBlockMatrix{T,DM,M,D} <: AbstractBlockMatrix{T}
     diagonals::Vector{DM}
     offdiagonals::Vector{M}
