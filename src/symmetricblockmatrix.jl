@@ -101,10 +101,7 @@ function SymmetricBlockMatrix(
     colorperm = Vector(1:length(threadsafecolors))
     for i in eachindex(offdiagonals)
         findcolor!(
-            i,
-            view(threadsafecolors, colorperm),
-            offdiagonals;
-            threadsafecheck=issymthreadsafe(),
+            i, threadsafecolors[colorperm], offdiagonals; threadsafecheck=issymthreadsafe()
         )
         sortperm!(colorperm, length.(threadsafecolors))
     end
