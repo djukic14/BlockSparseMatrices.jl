@@ -1,14 +1,8 @@
 # API Reference
 
-## Types
-```@docs
-BlockSparseMatrices.BlockSparseMatrix
-BlockSparseMatrices.SymmetricBlockMatrix
-BlockSparseMatrices.DenseMatrixBlock
+```@index
 ```
 
-## Functions
-```@docs
-BlockSparseMatrices.findcolor!
-BlockSparseMatrices.islessinordering
+```@autodocs
+Modules=[BlockSparseMatrices]
 ```

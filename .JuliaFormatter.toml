@@ -1,2 +1,18 @@
 # See https://domluna.github.io/JuliaFormatter.jl/stable/ for a list of options
 style = "blue"
+
+margin = 92
+
+align_assignment = true
+align_matrix = true
+
+always_use_return = true
+short_to_long_function_def = false
+remove_extra_newlines = true
+
+import_to_using = true
+format_docstrings = true
+conditional_to_if = true
+indent_submodule = true
+
+always_for_in=true

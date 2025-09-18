@@ -16,8 +16,8 @@ makedocs(;
     ),
     pages=[
         "Introduction" => "index.md",
-        "Manual" => "manual.md",
-        "Further Details" => "details.md",
+        "BlockSparseMatrix" => "block.md",
+        "SymmetricBlockMatrix" => "symmetric.md",
         "Contributing" => "contributing.md",
         "API Reference" => "apiref.md",
     ],

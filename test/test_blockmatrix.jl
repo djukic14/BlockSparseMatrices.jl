@@ -1,90 +1,150 @@
-using LinearAlgebra
 using Test
 using BlockSparseMatrices
 using SparseArrays
+using JLD2
+using LinearAlgebra
+using OhMyThreads
+using UnicodePlots
 
-mat1 = randn(ComplexF64, 2, 2)
-mat2 = randn(ComplexF64, 3, 3)
-mat3 = randn(ComplexF64, 2, 3)
-mat4 = Matrix(transpose(mat3))
+@testset "BlockSparseMatrix" begin
+    blockdict = load(
+        joinpath(pkgdir(BlockSparseMatrices), "test", "assets", "blockexamples.jld2")
+    )["blockdict"]
 
-M = [mat1 mat3; transpose(mat3) mat2]
+    for example in ["sphere", "cuboid"]
+        (blocks, testindices, trialindices) = blockdict[example]
 
-block1 = BlockSparseMatrices.DenseMatrixBlock(mat1, 1:2, 1:2)
-block2 = BlockSparseMatrices.DenseMatrixBlock(mat2, 3:5, 3:5)
-block3 = BlockSparseMatrices.DenseMatrixBlock(mat3, 1:2, 3:5)
-block4 = BlockSparseMatrices.DenseMatrixBlock(mat4, 3:5, 1:2)
-block5 = BlockSparseMatrices.DenseMatrixBlock(mat1, 6:7, 6:7)
+        size1 = maximum(maximum, testindices)
+        size2 = maximum(maximum, trialindices)
+        b = BlockSparseMatrix(
+            blocks, testindices, trialindices, (size1, size2); scheduler=SerialScheduler()
+        )
 
-@test BlockSparseMatrices.isthreadsafe()(block1, block2)
-@test BlockSparseMatrices.isthreadsafe()(block2, block1)
-@test BlockSparseMatrices.isthreadsafe()(block3, block4)
-@test BlockSparseMatrices.isthreadsafe()(block4, block3)
-@test !BlockSparseMatrices.isthreadsafe()(block1, block3)
-@test !BlockSparseMatrices.isthreadsafe()(block3, block1)
-@test !BlockSparseMatrices.isthreadsafe()(block1, block4)
-@test !BlockSparseMatrices.isthreadsafe()(block4, block1)
+        @test_nowarn println(b)
+        @test_nowarn println(b')
+        @test_nowarn println(transpose(b))
 
-blockmatrix = BlockSparseMatrix([block1, block2, block3, block4], 5, 5)
-@test blockmatrix[1, 1] == mat1[1, 1]
-blockmatrix2 = BlockSparseMatrix([block1, block2, block3, block4], (5, 5))
-blockmatrix3 = BlockSparseMatrix(
-    [mat1, mat2, mat3, mat4], [1:2, 3:5, 1:2, 3:5], [1:2, 3:5, 3:5, 1:2], (5, 5)
-)
-blockmatrix4 = BlockSparseMatrix([block1, block2, block5], 7, 7)
-@test blockmatrix4[1, 5] == 0.0
+        bparallel = BlockSparseMatrix(
+            blocks, testindices, trialindices, (size1, size2); scheduler=DynamicScheduler()
+        )
 
-@test length(blockmatrix4.threadsafecolors) == 2
+        @test_nowarn println(bparallel)
 
-@test blockmatrix.blocks == blockmatrix2.blocks == blockmatrix3.blocks
+        bsparse = sparse(b)
 
-@test size(blockmatrix) == (5, 5)
-@test size(blockmatrix, 1) == size(blockmatrix, 2) == 5
-@test size(transpose(blockmatrix)) == (5, 5)
-@test size(transpose(blockmatrix), 1) == size(transpose(blockmatrix), 2) == 5
-@test size(adjoint(blockmatrix)) == (5, 5)
-@test size(adjoint(blockmatrix), 1) == size(adjoint(blockmatrix), 2) == 5
-@test nnz(blockmatrix) == 25
+        bsparsetranspose = permutedims(bsparse)
+        bsparseadjoint = conj.(bsparsetranspose)
 
-x = rand(ComplexF64, 5)
-@test blockmatrix * x ≈ M * x
-@test adjoint(blockmatrix) * x ≈ adjoint(M) * x
-@test transpose(blockmatrix) * x ≈ transpose(M) * x
+        @test maximum(abs, sparse(b[:, :]).nzval - bsparse.nzval) < 1e-13
+        @test maximum(abs, sparse(bparallel[:, :]).nzval - bsparse.nzval) < 1e-13
 
-x1 = randn(ComplexF64, 5)
-x2 = deepcopy(x1)
+        @test maximum(abs, sparse(adjoint(b)[:, :]) - bsparseadjoint) < 1e-13
+        @test maximum(abs, sparse(adjoint(bparallel)[:, :]).nzval - bsparseadjoint.nzval) <
+            1e-13
 
-α = randn(ComplexF64)
-β = randn(ComplexF64)
+        @test maximum(abs, sparse(transpose(b)[:, :]).nzval - bsparsetranspose.nzval) <
+            1e-13
+        @test maximum(
+            abs, sparse(transpose(bparallel)[:, :]).nzval - bsparsetranspose.nzval
+        ) < 1e-13
 
-LinearAlgebra.mul!(x1, blockmatrix, x, α, β)
-LinearAlgebra.mul!(x2, M, x, α, β)
-@test x1 ≈ x2
-LinearAlgebra.mul!(x1, adjoint(blockmatrix), x, α, β)
-LinearAlgebra.mul!(x2, adjoint(M), x, α, β)
-@test x1 ≈ x2
-LinearAlgebra.mul!(x1, transpose(blockmatrix), x, α, β)
-LinearAlgebra.mul!(x2, transpose(M), x, α, β)
-@test x1 ≈ x2
+        for i in 1:10
+            y = randn(ComplexF64, size2)
 
-blockmatrix[1, 1] = 1.0
-@test blockmatrix[1, 1] == 1.0
-@test BlockSparseMatrices.eachblockindex(blockmatrix) ==
-    BlockSparseMatrices.eachblockindex(transpose(blockmatrix))
+            x = randn(ComplexF64, size1)
 
-block1 = BlockSparseMatrices.DenseMatrixBlock(mat1, 1:2, 1:2)
-block2 = BlockSparseMatrices.DenseMatrixBlock(mat2, 3:5, 3:5)
-block3 = BlockSparseMatrices.DenseMatrixBlock(mat3, 1:2, 3:5)
-block4 = BlockSparseMatrices.DenseMatrixBlock(mat4, 3:5, 1:2)
-block5 = BlockSparseMatrices.DenseMatrixBlock(mat1, 6:7, 6:7)
+            @test b * y ≈ bsparse * y
+            @test bparallel * y ≈ bsparse * y
 
-@test BlockSparseMatrices.isthreadsafe()(block1, block2)
-@test BlockSparseMatrices.isthreadsafe()(block2, block1)
-@test BlockSparseMatrices.isthreadsafe()(block3, block4)
-@test BlockSparseMatrices.isthreadsafe()(block4, block3)
-@test !BlockSparseMatrices.isthreadsafe()(block1, block3)
-@test !BlockSparseMatrices.isthreadsafe()(block3, block1)
-@test !BlockSparseMatrices.isthreadsafe()(block1, block4)
-@test !BlockSparseMatrices.isthreadsafe()(block4, block1)
+            @test b' * y ≈ bsparse' * y
+            @test bparallel' * y ≈ bsparse' * y
 
-blockmatrix = BlockSparseMatrix([block1, block2, block3, block4], 5, 5)
+            @test transpose(b) * y ≈ transpose(bsparse) * y
+            @test transpose(bparallel) * y ≈ transpose(bsparse) * y
+
+            @test LinearAlgebra.mul!(x, b, y, im, 2im) ≈
+                LinearAlgebra.mul!(x, bsparse, y, im, 2im)
+
+            @test LinearAlgebra.mul!(x, bparallel, y, im, 2im) ≈
+                LinearAlgebra.mul!(x, bsparse, y, im, 2im)
+
+            @test LinearAlgebra.mul!(x, b', y, im, 2im) ≈
+                LinearAlgebra.mul!(x, bsparse', y, im, 2im)
+
+            @test LinearAlgebra.mul!(x, bparallel', y, im, 2im) ≈
+                LinearAlgebra.mul!(x, bsparse', y, im, 2im)
+
+            @test LinearAlgebra.mul!(x, transpose(b), y, im, 2im) ≈
+                LinearAlgebra.mul!(x, transpose(bsparse), y, im, 2im)
+
+            @test LinearAlgebra.mul!(x, transpose(bparallel), y, im, 2im) ≈
+                LinearAlgebra.mul!(x, transpose(bsparse), y, im, 2im)
+        end
+
+        @test nnz(b) == nnz(bsparse)
+        @test nnz(bparallel) == nnz(bsparse)
+
+        @test nnz(b') == nnz(bsparse)
+        @test nnz(bparallel') == nnz(bsparse)
+
+        @test nnz(transpose(b)) == nnz(bsparse)
+        @test nnz(transpose(bparallel)) == nnz(bsparse)
+
+        @test eachblockindex(b) ==
+            eachblockindex(b') ==
+            eachblockindex(transpose(b)) ==
+            eachblockindex(bparallel) ==
+            eachblockindex(bparallel') ==
+            eachblockindex(transpose(bparallel))
+
+        for i in eachblockindex(b)
+            @test eltype(block(b, i)) == eltype(block(bparallel, i)) == ComplexF64
+            @test eltype(block(b, i)') == eltype(block(bparallel, i)') == ComplexF64
+            @test eltype(transpose(block(b, i))) ==
+                eltype(transpose(block(bparallel, i))) ==
+                ComplexF64
+        end
+
+        rows = rowvals(bsparse)
+        vals = nonzeros(bsparse)
+        for j in 1:size(bsparse, 1)
+            for i in nzrange(bsparse, j)
+                row = rows[i]
+                @test vals[i] == b[row, j]
+
+                @test vals[i] == bparallel[row, j]
+            end
+        end
+
+        bsparse.nzval .= 1
+        negativebsparse = sparse(ones(size(bsparse)) - bsparse)
+
+        counter = 0
+        for j in 1:size(bsparse, 1)
+            for i in nzrange(negativebsparse, j)
+                row = rowvals(negativebsparse)[i]
+                @test_throws ErrorException b[row, j] = 10
+                @test_throws ErrorException bparallel[row, j] = 10
+
+                @test iszero(b[row, j])
+                @test iszero(bparallel[row, j])
+
+                counter > 10 && break
+                counter += 1
+            end
+        end
+
+        for j in 1:size(bsparse, 1)
+            for i in nzrange(bsparse, j)
+                row = rows[i]
+                b[row, j] = 0
+                bparallel[row, j] = 0
+            end
+        end
+
+        bcollected = b[:, :]
+        @test all(iszero, bcollected)
+        bparallelcollected = bparallel[:, :]
+        @test all(iszero, bparallelcollected)
+    end
+end

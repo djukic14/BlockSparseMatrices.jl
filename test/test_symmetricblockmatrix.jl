@@ -1,92 +1,151 @@
-using LinearAlgebra
 using Test
 using BlockSparseMatrices
 using SparseArrays
+using JLD2
+using LinearAlgebra
+using OhMyThreads
+using UnicodePlots
+@testset "SymmetricBlockMatrix" begin
+    blockdict = load(
+        joinpath(
+            pkgdir(BlockSparseMatrices), "test", "assets", "symmetricblockexamples.jld2"
+        ),
+    )["blockdict"]
 
-block1 = randn(ComplexF64, 2, 2)
-block2 = randn(ComplexF64, 3, 3)
-block3 = randn(ComplexF64, 2, 3)
+    for example in ["sphere", "cuboid"]
+        (diagonalblocks, selfindices, offblocks, testindices, trialindices) = blockdict[example]
 
-M = [block1 block3; transpose(block3) block2]
+        size1 = maximum(maximum, testindices)
+        size2 = maximum(maximum, trialindices)
+        b = SymmetricBlockMatrix(
+            diagonalblocks,
+            selfindices,
+            offblocks,
+            testindices,
+            trialindices,
+            (size1, size2);
+            scheduler=SerialScheduler(),
+        )
 
-diagonal1 = BlockSparseMatrices.DenseMatrixBlock(block1, 1:2, 1:2)
-diagonal2 = BlockSparseMatrices.DenseMatrixBlock(block2, 3:5, 3:5)
-offdiagonal1 = BlockSparseMatrices.DenseMatrixBlock(block3, 1:2, 3:5)
+        @test_nowarn println(b)
+        @test_nowarn println(b')
+        @test_nowarn println(transpose(b))
 
-diagonalmatrix = SymmetricBlockMatrix([diagonal1, diagonal2], [offdiagonal1], 5, 5)
-diagonalmatrix2 = SymmetricBlockMatrix([diagonal1, diagonal2], [offdiagonal1], (5, 5))
-diagonalmatrix3 = SymmetricBlockMatrix(
-    [block1, block2], [1:2, 3:5], [1:2, 3:5], [block3], [1:2], [3:5], (5, 5)
-)
-@test diagonalmatrix.offdiagonals ==
-    diagonalmatrix2.offdiagonals ==
-    diagonalmatrix3.offdiagonals
-@test diagonalmatrix.diagonals == diagonalmatrix2.diagonals == diagonalmatrix3.diagonals
+        bparallel = SymmetricBlockMatrix(
+            diagonalblocks,
+            selfindices,
+            offblocks,
+            testindices,
+            trialindices,
+            (size1, size2);
+            scheduler=DynamicScheduler(),
+        )
 
-@test size(diagonalmatrix) == (5, 5)
-@test size(diagonalmatrix, 1) == size(diagonalmatrix, 2) == 5
-@test size(transpose(diagonalmatrix)) == (5, 5)
-@test size(transpose(diagonalmatrix), 1) == size(transpose(diagonalmatrix), 2) == 5
-@test size(adjoint(diagonalmatrix)) == (5, 5)
-@test size(adjoint(diagonalmatrix), 1) == size(adjoint(diagonalmatrix), 2) == 5
-@test nnz(diagonalmatrix) == 25
-@test diagonalmatrix[1, 1] == block1[1, 1]
-@test diagonalmatrix[3, 3] == block2[1, 1]
-@test diagonalmatrix[1, 3] == block3[1, 1]
-@test diagonalmatrix[3, 1] == block3[1, 1]
-@test BlockSparseMatrices.eachoffdiagonalindex(diagonalmatrix) ==
-    BlockSparseMatrices.eachoffdiagonalindex(transpose(diagonalmatrix))
+        @test_nowarn println(bparallel)
+        @test_nowarn println(bparallel')
+        @test_nowarn println(transpose(bparallel))
 
-x = rand(ComplexF64, 5)
-@test diagonalmatrix * x ≈ M * x
-@test adjoint(diagonalmatrix) * x ≈ adjoint(M) * x
-@test transpose(diagonalmatrix) * x ≈ transpose(M) * x
+        bsparse = sparse(b)
+        @test issymmetric(bsparse)
 
-x1 = randn(ComplexF64, 5)
-x2 = deepcopy(x1)
+        bsparsetranspose = permutedims(bsparse)
+        bsparseadjoint = conj.(bsparsetranspose)
 
-α = randn(ComplexF64)
-β = randn(ComplexF64)
+        @test maximum(abs, sparse(b[:, :]).nzval - bsparse.nzval) < 1e-13
+        @test maximum(abs, sparse(bparallel[:, :]).nzval - bsparse.nzval) < 1e-13
 
-LinearAlgebra.mul!(x1, diagonalmatrix, x, α, β)
-LinearAlgebra.mul!(x2, M, x, α, β)
-@test x1 ≈ x2
-LinearAlgebra.mul!(x1, adjoint(diagonalmatrix), x, α, β)
-LinearAlgebra.mul!(x2, adjoint(M), x, α, β)
-@test x1 ≈ x2
-LinearAlgebra.mul!(x1, transpose(diagonalmatrix), x, α, β)
-LinearAlgebra.mul!(x2, transpose(M), x, α, β)
-@test x1 ≈ x2
+        @test maximum(abs, sparse(adjoint(b)[:, :]) - bsparseadjoint) < 1e-13
+        @test maximum(abs, sparse(adjoint(bparallel)[:, :]).nzval - bsparseadjoint.nzval) <
+            1e-13
 
-diagonalmatrix[1, 1] = 1+im*2
-@test diagonalmatrix[1, 1] == 1+im*2
-diagonalmatrix[1, 3] = 1+im*2
-@test diagonalmatrix[1, 3] == 1+im*2
-diagonalmatrix[3, 1] = 2+im*1
-@test diagonalmatrix[3, 1] == 2+im*1
+        @test maximum(abs, sparse(transpose(b)[:, :]).nzval - bsparsetranspose.nzval) <
+            1e-13
+        @test maximum(
+            abs, sparse(transpose(bparallel)[:, :]).nzval - bsparsetranspose.nzval
+        ) < 1e-13
 
-# check threadsafecolors
-block1 = randn(ComplexF64, 2, 2)
-block2 = randn(ComplexF64, 2, 2)
-block3 = randn(ComplexF64, 2, 2)
+        for i in 1:10
+            y = randn(ComplexF64, size2)
 
-M = [
-    zeros(2, 2) transpose(block1) transpose(block2)
-    block1 zeros(2, 2) transpose(block2)
-    block2 block3 zeros(2, 2)
-]
+            x = randn(ComplexF64, size1)
 
-od1 = BlockSparseMatrices.DenseMatrixBlock(block1, 3:4, 1:2)
-od2 = BlockSparseMatrices.DenseMatrixBlock(block2, 5:6, 1:2)
-od3 = BlockSparseMatrices.DenseMatrixBlock(block2, 5:6, 3:4)
+            @test b * y ≈ bsparse * y
+            @test bparallel * y ≈ bsparse * y
 
-diagonalmatrix = SymmetricBlockMatrix([], [od1, od2, od3], 6, 6)
+            @test b' * y ≈ bsparse' * y
+            @test bparallel' * y ≈ bsparse' * y
 
-@test !BlockSparseMatrices.issymthreadsafe()(od1, od2)
-@test !BlockSparseMatrices.issymthreadsafe()(od2, od1)
-@test !BlockSparseMatrices.issymthreadsafe()(od1, od3)
-@test !BlockSparseMatrices.issymthreadsafe()(od3, od1)
-@test BlockSparseMatrices.isthreadsafe()(od1, od3)
-@test BlockSparseMatrices.isthreadsafe()(od3, od1)
-@test !BlockSparseMatrices.issymthreadsafe()(od2, od3)
-@test !BlockSparseMatrices.issymthreadsafe()(od3, od2)
+            @test transpose(b) * y ≈ transpose(bsparse) * y
+            @test transpose(bparallel) * y ≈ transpose(bsparse) * y
+
+            @test LinearAlgebra.mul!(x, b, y, im, 2im) ≈
+                LinearAlgebra.mul!(x, bsparse, y, im, 2im)
+
+            @test LinearAlgebra.mul!(x, bparallel, y, im, 2im) ≈
+                LinearAlgebra.mul!(x, bsparse, y, im, 2im)
+
+            @test LinearAlgebra.mul!(x, b', y, im, 2im) ≈
+                LinearAlgebra.mul!(x, bsparse', y, im, 2im)
+
+            @test LinearAlgebra.mul!(x, bparallel', y, im, 2im) ≈
+                LinearAlgebra.mul!(x, bsparse', y, im, 2im)
+
+            @test LinearAlgebra.mul!(x, transpose(b), y, im, 2im) ≈
+                LinearAlgebra.mul!(x, transpose(bsparse), y, im, 2im)
+
+            @test LinearAlgebra.mul!(x, transpose(bparallel), y, im, 2im) ≈
+                LinearAlgebra.mul!(x, transpose(bsparse), y, im, 2im)
+        end
+
+        @test nnz(b) == nnz(bsparse)
+        @test nnz(bparallel) == nnz(bsparse)
+
+        @test nnz(b') == nnz(bsparse)
+        @test nnz(bparallel') == nnz(bsparse)
+
+        @test nnz(transpose(b)) == nnz(bsparse)
+        @test nnz(transpose(bparallel)) == nnz(bsparse)
+
+        rows = rowvals(bsparse)
+        vals = nonzeros(bsparse)
+        for j in 1:size(bsparse, 1)
+            for i in nzrange(bsparse, j)
+                row = rows[i]
+                @test vals[i] == b[row, j]
+
+                @test vals[i] == bparallel[row, j]
+            end
+        end
+
+        bsparse.nzval .= 1
+        negativebsparse = sparse(ones(size(bsparse)) - bsparse)
+
+        counter = 0
+        for j in 1:size(bsparse, 1)
+            for i in nzrange(negativebsparse, j)
+                row = rowvals(negativebsparse)[i]
+                @test_throws ErrorException b[row, j] = 10
+                @test_throws ErrorException bparallel[row, j] = 10
+
+                @test iszero(b[row, j])
+                @test iszero(bparallel[row, j])
+
+                counter > 10 && break
+                counter += 1
+            end
+        end
+
+        for j in 1:size(bsparse, 1)
+            for i in nzrange(bsparse, j)
+                row = rows[i]
+                b[row, j] = 0
+                bparallel[row, j] = 0
+            end
+        end
+
+        bcollected = b[:, :]
+        @test all(iszero, bcollected)
+        bparallelcollected = bparallel[:, :]
+        @test all(iszero, bparallelcollected)
+    end
+end
