@@ -3,9 +3,9 @@ using LinearAlgebra
 using SparseArrays
 using LinearMaps
 using OhMyThreads
-using Graphs, GraphColoring
+using Graphs, GraphsColoring
 
-import GraphColoring: conflicts, conflictgraph, conflictmatrix, ConflictFunctor
+import GraphsColoring: conflicts, conflictgraph, conflictmatrix, ConflictFunctor
 
 const coloringalgorithm = WorkstreamDSATUR
 

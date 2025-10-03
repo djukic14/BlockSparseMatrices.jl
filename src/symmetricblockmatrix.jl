@@ -155,12 +155,12 @@ function SymmetricBlockMatrix(
         _appendindexdict!(offdiagonalscolindexdict, block.colindices, i)
     end
 
-    diagonalcolors = color(conflictgraph(diagonals); algorithm=coloringalgorithm)
+    diagonalcolors = color(conflictgraph(diagonals); algorithm=coloringalgorithm).colors
 
-    offdiagonalcolors = color(conflictgraph(offdiagonals); algorithm=coloringalgorithm)
-    transposeoffdiagonalcolors = color(
-        conflictgraph(offdiagonals; transpose=true); algorithm=coloringalgorithm
-    )
+    offdiagonalcolors =
+        color(conflictgraph(offdiagonals); algorithm=coloringalgorithm).colors
+    transposeoffdiagonalcolors =
+        color(conflictgraph(offdiagonals; transpose=true); algorithm=coloringalgorithm).colors
 
     return SymmetricBlockMatrix{
         eltype(M),DM,M,typeof(diagonalsrowindexdict),typeof(scheduler)

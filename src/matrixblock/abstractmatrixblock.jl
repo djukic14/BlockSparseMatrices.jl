@@ -136,7 +136,7 @@ end
 """
     conflicts(blocks::Vector{A}; kwargs...) where {A<:AbstractMatrixBlock}
 
-Computes the conflicts between blocks for the purpose of graph coloring using `GraphColoring.jl`.
+Computes the conflicts between blocks for the purpose of graph coloring using `GraphsColoring.jl`.
 This function is used to determine the coloring of blocks for multithreading in the
 matrix-vector product, ensuring that blocks with no conflicts can be processed in parallel.
 

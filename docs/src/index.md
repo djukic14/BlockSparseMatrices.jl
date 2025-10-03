@@ -7,7 +7,7 @@ It also includes specialized algorithms for symmetric block‑sparse matrices, s
 
 - **Block‑sparse storage** – the matrix is built from a small set of (dense) sub‑blocks.  
 - **Symmetric support** – for symmetric block‑sparse matrices only the lower (or upper) triangular block‑structure is kept, reducing memory usage.  
-- **Multithreaded matrix–vector multiplication** – leverages  [OhMyThreads](https://github.com/JuliaFolds2/OhMyThreads.jl) and [GraphColoring](https://github.com/djukic14/GraphColoring.jl) for safe parallelism.  
+- **Multithreaded matrix–vector multiplication** – leverages  [OhMyThreads](https://github.com/JuliaFolds2/OhMyThreads.jl) and [GraphsColoring](https://github.com/JuliaGraphs/GraphsColoring.jl) for safe parallelism.  
 
 ### Implemented Operations  
 

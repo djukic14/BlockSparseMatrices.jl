@@ -1,5 +1,4 @@
 using Test, TestItems, TestItemRunner
-using BlockSparseMatrices
 
 @testitem "BlockSparseMatrices" begin
     include("test_blockmatrix.jl")
@@ -13,6 +12,7 @@ end
 
 @testitem "Code formatting (JuliaFormatter.jl)" begin
     using JuliaFormatter
+    using BlockSparseMatrices
     @test JuliaFormatter.format(pkgdir(BlockSparseMatrices), overwrite=false)
 end
 

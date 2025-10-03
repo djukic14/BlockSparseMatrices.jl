@@ -58,7 +58,7 @@ indices, and size.
   - `rowindices`: A vector of row indices corresponding to each block.
   - `colindices`: A vector of column indices corresponding to each block.
   - `size`: A tuple representing the size of the block sparse matrix.
-  - `coloringalgorithm`: The algorithm from `GraphColoring.jl` used to color the blocks for
+  - `coloringalgorithm`: The algorithm from `GraphsColoring.jl` used to color the blocks for
     parallel computation. Defaults to `coloringalgorithm`.
   - `scheduler`: The scheduler used to manage parallel computation. Defaults to `SerialScheduler()`.
 
@@ -96,7 +96,7 @@ Constructs a new `BlockSparseMatrix` instance from the given blocks and size.
 
   - `blocks`: A vector of `AbstractMatrixBlock` instances.
   - `size`: A tuple representing the size of the block sparse matrix.
-  - `coloringalgorithm`: The algorithm from `GraphColoring.jl` used to color the blocks for
+  - `coloringalgorithm`: The algorithm from `GraphsColoring.jl` used to color the blocks for
     parallel computation. Defaults to `coloringalgorithm`.
   - `scheduler`: The scheduler used to manage parallel computation. Defaults to `SerialScheduler()`.
 
@@ -138,10 +138,10 @@ function BlockSparseMatrix(
     colors, transposecolors = if isserial(scheduler)
         [eachindex(blocks)], [eachindex(blocks)]
     else
-        colors = color(conflictgraph(blocks; transpose=false); algorithm=coloringalgorithm)
-        transposecolors = color(
-            conflictgraph(blocks; transpose=true); algorithm=coloringalgorithm
-        )
+        colors =
+            color(conflictgraph(blocks; transpose=false); algorithm=coloringalgorithm).colors
+        transposecolors =
+            color(conflictgraph(blocks; transpose=true); algorithm=coloringalgorithm).colors
         colors, transposecolors
     end
 
@@ -214,7 +214,7 @@ end
     colors(A::BlockSparseMatrix)
 
 Returns the colors used for multithreading in matrix-vector for the given
-`BlockSparseMatrix`. These colors are created using `GraphColoring.jl` and represent a
+`BlockSparseMatrix`. These colors are created using `GraphsColoring.jl` and represent a
 partitioning of the blocks into sets that can be processed in parallel without race conditions.
 
 # Arguments
@@ -233,7 +233,7 @@ end
     colors(A::BlockSparseMatrix)
 
 Returns the colors used for multithreading in the transposed matrix-vector product computations for the
-given `BlockSparseMatrix`. These colors are created using `GraphColoring.jl` and represent a
+given `BlockSparseMatrix`. These colors are created using `GraphsColoring.jl` and represent a
 partitioning of the blocks into sets that can be processed in parallel without race conditions.
 
 # Arguments
