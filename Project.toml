@@ -1,7 +1,7 @@
 name = "BlockSparseMatrices"
 uuid = "1ef78180-cc57-4e70-b6ec-c3e471307147"
 authors = ["djukic14 <danijel.jukic14@gmail.com> and contributors"]
-version = "0.1.0"
+version = "0.2.0"
 
 [deps]
 Graphs = "86223c79-3864-5bf0-83f7-82e725a168b6"
