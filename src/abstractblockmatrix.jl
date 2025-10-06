@@ -77,7 +77,7 @@ function buffer(
 end
 
 function LinearMaps._unsafe_mul!(
-    y::AbstractVector, A::M, x::AbstractVector, α, β
+    y::AbstractVector, A::M, x::AbstractVector, α::Number, β::Number
 ) where {
     Z<:AbstractBlockMatrix,
     M<:Union{Z,LinearMaps.AdjointMap{<:Any,Z},LinearMaps.TransposeMap{<:Any,Z}},
