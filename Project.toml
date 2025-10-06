@@ -4,23 +4,45 @@ authors = ["djukic14 <danijel.jukic14@gmail.com> and contributors"]
 version = "0.1.0"
 
 [deps]
+Graphs = "86223c79-3864-5bf0-83f7-82e725a168b6"
+GraphsColoring = "ed38bb8a-6120-4024-8d1e-8789784f251b"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 LinearMaps = "7a12625a-238d-50fd-b39a-03d52299707e"
 OhMyThreads = "67456a42-1dca-4109-a031-0a68de7e3ad5"
 SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
 
+[weakdeps]
+UnicodePlots = "b8865327-cd53-5732-bb35-84acbb429228"
+
+[extensions]
+BlockUnicodePlots = ["UnicodePlots"]
+
 [compat]
-LinearMaps = "3"
+Aqua = "0.8"
+Graphs = "1"
+GraphsColoring = "0.2.0"
+JLD2 = "0.6"
+JuliaFormatter = "2.1"
+LinearAlgebra = "1"
+LinearMaps = "3.7 - 3.9, 3.11"
 OhMyThreads = "0.8.3"
+SparseArrays = "1"
+Test = "1"
+TestItemRunner = "1.1"
+TestItems = "1.0"
+UnicodePlots = "3.8.1"
 julia = "1"
 
 [extras]
 Aqua = "4c88cf16-eb10-579e-8560-4a9242c79595"
-JET = "c3a54625-cd67-489e-a8e7-0a5a0ff4e31b"
+JLD2 = "033835bb-8acc-5ee8-8aae-3f567f8a3819"
 JuliaFormatter = "98e50ef6-434e-11e9-1051-2b60c6c9e899"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+OhMyThreads = "67456a42-1dca-4109-a031-0a68de7e3ad5"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 TestItemRunner = "f8b46487-2199-4994-9208-9a1283c18c0a"
 TestItems = "1c621080-faea-4a02-84b6-bbd5e436b8fe"
+UnicodePlots = "b8865327-cd53-5732-bb35-84acbb429228"
 
 [targets]
-test = ["Aqua", "JET", "JuliaFormatter", "Test", "TestItemRunner", "TestItems"]
+test = ["Aqua", "JLD2", "LinearAlgebra", "JuliaFormatter", "OhMyThreads", "Test", "TestItemRunner", "TestItems", "UnicodePlots"]

@@ -1,50 +1,127 @@
 """
-    struct BlockSparseMatrix{T,M,D} <: AbstractBlockMatrix{T}
+    struct BlockSparseMatrix{T,M,D,S} <: AbstractBlockMatrix{T}
 
-Sparse block matrix.
+A concrete implementation of a block sparse matrix, which is a sparse matrix composed of
+smaller dense matrix blocks.
+
+# Type Parameters
+
+  - `T`: The element type of the matrix.
+  - `M`: The type of the matrix blocks.
+  - `D`: The type of the row and column index dictionaries.
+  - `S`: The type of the scheduler.
 
 # Fields
-- `blocks::Vector{M}`: Dense blocks.
-- `size::Tuple{Int,Int}`: Size of the matrix.
-- `forwardbuffer::Vector{T}`: ???.
-- `adjointbuffer::Vector{T}`: ???.
-- `buffer::Vector{T}`: ???.
-- `rowindexdict::D`: Global rowindices of dense blocks.
-- `colindexdict::D`: Global columnindices of dense blocks.
-- `threadsafecolors::Vector{Vector{Int}}`: Coloring of dense blocks for multithreaded matrix-vector product.
-- `ntasks::Int`: Threads used for the matrix Vector product.
+
+  - `blocks`: A vector of matrix blocks that comprise the block sparse matrix.
+  - `size`: A tuple representing the size of the block sparse matrix.
+  - `forwardbuffer`: A buffer used for forward matrix-vector product computations.
+  - `adjointbuffer`: A buffer used for adjoint matrix-vector product computations.
+  - `buffer`: The underlying buffer that is reused for both forward and adjoint products.
+  - `rowindexdict`: A dictionary that maps row indices to block indices.
+  - `colindexdict`: A dictionary that maps column indices to block indices.
+  - `colors`: A vector of colors, where each color is a vector of block indices that can be
+    processed in parallel without race conditions.
+  - `transposecolors`: A vector of colors for the transpose matrix, where each color is a
+    vector of block indices that can be processed in parallel without race conditions.
+  - `scheduler`: A scheduler that manages the parallel computation of matrix-vector products.
 """
-struct BlockSparseMatrix{T,M,D} <: AbstractBlockMatrix{T}
+struct BlockSparseMatrix{T,M,D,S} <: AbstractBlockMatrix{T}
     blocks::Vector{M}
     size::Tuple{Int,Int}
     forwardbuffer::Vector{T}
     adjointbuffer::Vector{T}
     buffer::Vector{T}
     rowindexdict::D
-    colindexdict::D
-    threadsafecolors::Vector{Vector{Int}}
-    ntasks::Int
+    colindexdict::D #TODO: find smarter way to search for entries in matrix
+    colors::Vector{Vector{Int}}
+    transposecolors::Vector{Vector{Int}}
+    scheduler::S
+end
+
+"""
+    BlockSparseMatrix(
+        blocks::Vector{M},
+        rowindices::V,
+        colindices::V,
+        size::Tuple{Int,Int};
+        coloringalgorithm=coloringalgorithm,
+        scheduler=DynamicScheduler(),
+    ) where {M,V}
+
+Constructs a new `BlockSparseMatrix` instance from the given blocks, row indices, column
+indices, and size.
+
+# Arguments
+
+  - `blocks`: A vector of dense matrices.
+  - `rowindices`: A vector of row indices corresponding to each block.
+  - `colindices`: A vector of column indices corresponding to each block.
+  - `size`: A tuple representing the size of the block sparse matrix.
+  - `coloringalgorithm`: The algorithm from `GraphsColoring.jl` used to color the blocks for
+    parallel computation. Defaults to `coloringalgorithm`.
+  - `scheduler`: The scheduler used to manage parallel computation. Defaults to `SerialScheduler()`.
+
+# Returns
+
+  - A new `BlockSparseMatrix` instance constructed from the given blocks, row indices, column indices, and size.
+"""
+function BlockSparseMatrix(
+    blocks::Vector{M},
+    rowindices::V,
+    colindices::V,
+    size::Tuple{Int,Int};
+    coloringalgorithm=coloringalgorithm,
+    scheduler=SerialScheduler(),
+) where {M,V}
+    return BlockSparseMatrix(
+        denseblocks(blocks, rowindices, colindices),
+        size;
+        coloringalgorithm=coloringalgorithm,
+        scheduler=scheduler,
+    )
+end
+
+"""
+    BlockSparseMatrix(
+        blocks::Vector{M},
+        size::Tuple{Int,Int};
+        coloringalgorithm=coloringalgorithm,
+        scheduler=SerialScheduler(),
+    ) where {M<:AbstractMatrixBlock}
+
+Constructs a new `BlockSparseMatrix` instance from the given blocks and size.
+
+# Arguments
+
+  - `blocks`: A vector of `AbstractMatrixBlock` instances.
+  - `size`: A tuple representing the size of the block sparse matrix.
+  - `coloringalgorithm`: The algorithm from `GraphsColoring.jl` used to color the blocks for
+    parallel computation. Defaults to `coloringalgorithm`.
+  - `scheduler`: The scheduler used to manage parallel computation. Defaults to `SerialScheduler()`.
+
+# Returns
+
+  - A new `BlockSparseMatrix` instance constructed from the given blocks and size.
+"""
+function BlockSparseMatrix(
+    blocks::Vector{M},
+    size::Tuple{Int,Int};
+    coloringalgorithm=coloringalgorithm,
+    scheduler=SerialScheduler(),
+) where {M<:AbstractMatrixBlock}
+    return BlockSparseMatrix(
+        blocks, size[1], size[2]; coloringalgorithm=coloringalgorithm, scheduler=scheduler
+    )
 end
 
 function BlockSparseMatrix(
-    blocks::Vector{M}, rowindices::V, colindices::V, size::Tuple{Int,Int}; ntasks=1
-) where {M,V}
-    denseblockmatrices = Vector{DenseMatrixBlock{eltype(M),M,eltype(rowindices)}}(
-        undef, length(blocks)
-    )
-
-    for i in eachindex(blocks)
-        denseblockmatrices[i] = DenseMatrixBlock(blocks[i], rowindices[i], colindices[i])
-    end
-
-    return BlockSparseMatrix(denseblockmatrices, size; ntasks=ntasks)
-end
-
-function BlockSparseMatrix(blocks::Vector{M}, size::Tuple{Int,Int}; ntasks=1) where {M}
-    return BlockSparseMatrix(blocks, size[1], size[2]; ntasks=ntasks)
-end
-
-function BlockSparseMatrix(blocks::Vector{M}, rows::Int, cols::Int; ntasks=1) where {M}
+    blocks::Vector{M},
+    rows::Int,
+    cols::Int;
+    scheduler=SerialScheduler(),
+    coloringalgorithm=coloringalgorithm,
+) where {M<:AbstractMatrixBlock}
     forwardbuffer, adjointbuffer, buffer = buffers(eltype(M), rows, cols)
 
     sort!(blocks; lt=islessinordering)
@@ -57,25 +134,18 @@ function BlockSparseMatrix(blocks::Vector{M}, rows::Int, cols::Int; ntasks=1) wh
         _appendindexdict!(colindexdict, block.colindices, i)
     end
 
-    #TODO: Pessimistic choice -> check performance
-    if blocks != M[]
-        threadsafecolors = [
-            Int[] for _ in
-            1:(maximum(length.(values(rowindexdict))) + maximum(
-                length.(values(colindexdict))
-            ))
-        ]
+    # no coloring needed for single-threaded execution
+    colors, transposecolors = if isserial(scheduler)
+        [eachindex(blocks)], [eachindex(blocks)]
     else
-        threadsafecolors = Vector{Int}[]
+        colors =
+            color(conflictgraph(blocks; transpose=false); algorithm=coloringalgorithm).colors
+        transposecolors =
+            color(conflictgraph(blocks; transpose=true); algorithm=coloringalgorithm).colors
+        colors, transposecolors
     end
 
-    colorperm = Vector(1:length(threadsafecolors))
-    for i in eachindex(blocks)
-        findcolor!(i, threadsafecolors[colorperm], blocks)
-        sortperm!(colorperm, length.(threadsafecolors))
-    end
-
-    return BlockSparseMatrix{eltype(M),M,typeof(rowindexdict)}(
+    return BlockSparseMatrix{eltype(M),M,typeof(rowindexdict),typeof(scheduler)}(
         blocks,
         (rows, cols),
         forwardbuffer,
@@ -83,11 +153,25 @@ function BlockSparseMatrix(blocks::Vector{M}, rows::Int, cols::Int; ntasks=1) wh
         buffer,
         rowindexdict,
         colindexdict,
-        threadsafecolors,
-        ntasks,
+        colors,
+        transposecolors,
+        scheduler,
     )
 end
 
+"""
+    eachblockindex(A::BlockSparseMatrix)
+
+Returns an iterator over the indices of the blocks in the given `BlockSparseMatrix` instance.
+
+# Arguments
+
+  - `A`: The `BlockSparseMatrix` instance to query.
+
+# Returns
+
+  - An iterator that yields the indices of the blocks in the `BlockSparseMatrix`.
+"""
 function eachblockindex(A::BlockSparseMatrix)
     return eachindex(A.blocks)
 end
@@ -100,6 +184,20 @@ function eachblockindex(
     return eachblockindex(A.lmap)
 end
 
+"""
+    block(A::BlockSparseMatrix, i)
+
+Returns the `i`-th block of the given `BlockSparseMatrix` instance.
+
+# Arguments
+
+  - `A`: The `BlockSparseMatrix` instance to query.
+  - `i`: The index of the block to retrieve.
+
+# Returns
+
+  - The `i`-th block of the `BlockSparseMatrix`.
+"""
 function block(A::BlockSparseMatrix, i)
     return A.blocks[i]
 end
@@ -112,27 +210,61 @@ function block(A::M, i) where {Z<:BlockSparseMatrix,T,M<:LinearMaps.TransposeMap
     return transpose(block(A.lmap, i))
 end
 
-ntasks(A::BlockSparseMatrix) = A.ntasks
+"""
+    colors(A::BlockSparseMatrix)
 
-function ntasks(
+Returns the colors used for multithreading in matrix-vector for the given
+`BlockSparseMatrix`. These colors are created using `GraphsColoring.jl` and represent a
+partitioning of the blocks into sets that can be processed in parallel without race conditions.
+
+# Arguments
+
+  - `A`: The `BlockSparseMatrix` instance to query.
+
+# Returns
+
+  - A collection of colors, where each color is a vector of block indices that can be processed in parallel.
+"""
+function colors(A::BlockSparseMatrix)
+    return A.colors
+end
+
+"""
+    colors(A::BlockSparseMatrix)
+
+Returns the colors used for multithreading in the transposed matrix-vector product computations for the
+given `BlockSparseMatrix`. These colors are created using `GraphsColoring.jl` and represent a
+partitioning of the blocks into sets that can be processed in parallel without race conditions.
+
+# Arguments
+
+  - `A`: The `BlockSparseMatrix` instance to query.
+
+# Returns
+
+  - A collection of colors, where each color is a vector of block indices that can be processed in parallel.
+"""
+function transposecolors(A::BlockSparseMatrix)
+    return A.transposecolors
+end
+
+function colors(
     A::M
 ) where {
     Z<:BlockSparseMatrix,T,M<:Union{LinearMaps.AdjointMap{T,Z},LinearMaps.TransposeMap{T,Z}}
 }
-    return ntasks(A.lmap)
+    return transposecolors(A.lmap)
 end
 
-threadsafecolors(A::BlockSparseMatrix) = A.threadsafecolors
-
-function threadsafecolors(
+function SparseArrays.nnz(
     A::M
 ) where {
-    Z<:BlockSparseMatrix,T,M<:Union{LinearMaps.AdjointMap{T,Z},LinearMaps.TransposeMap{T,Z}}
+    M<:Union{
+        <:BlockSparseMatrix,
+        LinearMaps.AdjointMap{<:Any,<:BlockSparseMatrix},
+        LinearMaps.TransposeMap{<:Any,<:BlockSparseMatrix},
+    },
 }
-    return threadsafecolors(A.lmap)
-end
-
-function SparseArrays.nnz(A::BlockSparseMatrix)
     nonzeros = 0
     for blockid in eachblockindex(A)
         nonzeros += nnz(block(A, blockid))
@@ -148,9 +280,10 @@ function LinearMaps._unsafe_mul!(
     M<:Union{Z,LinearMaps.AdjointMap{<:Any,Z},LinearMaps.TransposeMap{<:Any,Z}},
 }
     y .= zero(eltype(y))
-    for color in threadsafecolors(A)
+    for color in colors(A)
         @tasks for blockid in color
-            @set ntasks = ntasks(A)
+            @set scheduler = BlockSparseMatrices.scheduler(A)
+
             b = block(A, blockid)
             @inbounds LinearAlgebra.mul!(view(y, rowindices(b)), b, view(x, colindices(b)))
         end

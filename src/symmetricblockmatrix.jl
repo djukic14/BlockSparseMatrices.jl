@@ -1,23 +1,42 @@
 """
-    SymmetricBlockMatrix{T,DM,M,D} <: AbstractBlockMatrix{T}
+    struct SymmetricBlockMatrix{T,DM,M,D,S} <: AbstractBlockMatrix{T}
 
-Symmetric sparse block matrix.
+A concrete implementation of a symmetric block matrix, which is a block matrix where the
+off-diagonal blocks are shared between the upper and lower triangular parts.
+The diagonal blocks are symmetric as well.
+
+# Type Parameters
+
+  - `T`: The element type of the matrix.
+  - `DM`: The type of the diagonal matrix blocks.
+  - `M`: The type of the off-diagonal matrix blocks.
+  - `D`: The type of the row and column index dictionaries.
+  - `S`: The type of the scheduler.
 
 # Fields
-- `diagonals::Vector{DM}`: Dense blocks on the diagonal of the matrix.
-- `offdiagonals::Vector{M}`: Dense blocks not on the diagonal.
-- `size::Tuple{Int,Int}`: Size of the matrix.
-- `forwardbuffer::Vector{T}`: ???.
-- `adjointbuffer::Vector{T}`: ???.
-- `buffer::Vector{T}`: ???.
-- `diagonalrowindexdict::D`: Global rowindices of diagonal dense blocks.
-- `diagonalcolindexdict::D`: Global columnindices of offdiagonal dense blocks.
-- `offdiagonalrowindexdict::D`: Global rowindices of diagonal dense blocks.
-- `offdiagonalcolindexdict::D`: Global columnindices of offdiagonal dense blocks.
-- `threadsafecolors::Vector{Vector{Int}}`: Coloring of dense blocks for multithreaded matrix-vector product.
-- `ntasks::Int`: Threads used for the matrix Vector product.
+
+  - `diagonals`: A vector of diagonal matrix blocks.
+  - `offdiagonals`: A vector of off-diagonal matrix blocks.
+  - `size`: A tuple representing the size of the symmetric block matrix.
+  - `forwardbuffer`: A buffer used for forward matrix-vector product computations.
+  - `adjointbuffer`: A buffer used for adjoint matrix-vector product computations.
+  - `buffer`: The underlying buffer that is reused for both forward and adjoint products.
+  - `diagonalsrowindexdict`: A dictionary that maps row indices to diagonal block indices.
+  - `diagonalscolindexdict`: A dictionary that maps column indices to diagonal block indices.
+  - `offdiagonalsrowindexdict`: A dictionary that maps row indices to off-diagonal block
+    indices.
+  - `offdiagonalscolindexdict`: A dictionary that maps column indices to off-diagonal block
+    indices.
+  - `diagonalcolors`: A vector of colors for the diagonal blocks, where each color is a vector
+    of block indices that can be processed in parallel without race conditions.
+  - `offdiagonalcolors`: A vector of colors for the off-diagonal blocks, where each color is a
+    vector of block indices that can be processed in parallel without race conditions.
+  - `transposeoffdiagonalcolors`: A vector of colors for the transposed off-diagonal blocks,
+    where each color is a vector of block indices that can be processed in parallel without
+    race conditions.
+  - `scheduler`: A scheduler that manages the parallel computation of matrix-vector products.
 """
-struct SymmetricBlockMatrix{T,DM,M,D} <: AbstractBlockMatrix{T}
+struct SymmetricBlockMatrix{T,DM,M,D,S} <: AbstractBlockMatrix{T}
     diagonals::Vector{DM}
     offdiagonals::Vector{M}
     size::Tuple{Int,Int}
@@ -28,46 +47,94 @@ struct SymmetricBlockMatrix{T,DM,M,D} <: AbstractBlockMatrix{T}
     diagonalscolindexdict::D
     offdiagonalsrowindexdict::D
     offdiagonalscolindexdict::D
-    threadsafecolors::Vector{Vector{Int}}
-    ntasks::Int
+    diagonalcolors::Vector{Vector{Int}}
+    offdiagonalcolors::Vector{Vector{Int}}
+    transposeoffdiagonalcolors::Vector{Vector{Int}}
+    scheduler::S
+end
+
+"""
+    SymmetricBlockMatrix(
+        diagonals::Vector{DM},
+        diagonalindices::V,
+        offdiagonals::Vector{M},
+        rowindices::V,
+        columnindices::V,
+        size::Tuple{Int,Int};
+        scheduler=DynamicScheduler(),
+    ) where {DM,M,V}
+
+Constructs a new `SymmetricBlockMatrix` instance from the given diagonal and off-diagonal blocks, indices, and size.
+
+# Arguments
+
+  - `diagonals`: A vector of symmetric dense matrices.
+  - `diagonalindices`: A vector of indices corresponding to the diagonal blocks.
+  - `offdiagonals`: A vector of dense matrices.
+  - `rowindices`: A vector of row indices corresponding to the off-diagonal blocks.
+  - `columnindices`: A vector of column indices corresponding to the off-diagonal blocks.
+  - `size`: A tuple representing the size of the symmetric block matrix.
+  - `scheduler`: The scheduler used to manage parallel computation. Defaults to `DynamicScheduler()`.
+
+# Returns
+
+  - A new `SymmetricBlockMatrix` instance constructed from the given blocks, indices, and size.
+"""
+function SymmetricBlockMatrix(
+    diagonals::Vector{DM},
+    diagonalindices::V,
+    offdiagonals::Vector{M},
+    rowindices::V,
+    columnindices::V,
+    size::Tuple{Int,Int};
+    scheduler=DynamicScheduler(),
+) where {DM,M,V}
+    return SymmetricBlockMatrix(
+        denseblocks(diagonals, diagonalindices, diagonalindices),
+        denseblocks(offdiagonals, rowindices, columnindices),
+        size;
+        scheduler=scheduler,
+    )
+end
+
+"""
+    SymmetricBlockMatrix(
+        diagonals::Vector{DM},
+        offdiagonals::Vector{M},
+        size::Tuple{Int,Int};
+        scheduler=DynamicScheduler(),
+    ) where {DM<:AbstractMatrixBlock,M<:AbstractMatrixBlock}
+
+Constructs a new `SymmetricBlockMatrix` instance from the given diagonal and off-diagonal blocks, and size.
+
+# Arguments
+
+  - `diagonals`: A vector of `AbstractMatrixBlock` instances.
+  - `offdiagonals`: A vector of `AbstractMatrixBlock` instances.
+  - `size`: A tuple representing the size of the symmetric block matrix.
+  - `scheduler`: The scheduler used to manage parallel computation. Defaults to `DynamicScheduler()`.
+
+# Returns
+
+  - A new `SymmetricBlockMatrix` instance constructed from the given blocks and size.
+"""
+function SymmetricBlockMatrix(
+    diagonals::Vector{DM},
+    offdiagonals::Vector{M},
+    size::Tuple{Int,Int};
+    scheduler=DynamicScheduler(),
+) where {DM<:AbstractMatrixBlock,M<:AbstractMatrixBlock}
+    return SymmetricBlockMatrix(
+        diagonals, offdiagonals, size[1], size[2]; scheduler=scheduler
+    )
 end
 
 function SymmetricBlockMatrix(
     diagonals::Vector{DM},
-    drowidcs::V,
-    dcolidcs::V,
     offdiagonals::Vector{M},
-    rowidcs::V,
-    colidcs::V,
-    size::Tuple{Int,Int};
-    ntasks=1,
-) where {DM,M,V}
-    offdiagonalblocks = Vector{DenseMatrixBlock{eltype(M),M,eltype(rowidcs)}}(
-        undef, length(offdiagonals)
-    )
-    diagonalblocks = Vector{DenseMatrixBlock{eltype(M),M,eltype(rowidcs)}}(
-        undef, length(diagonals)
-    )
-
-    for i in eachindex(offdiagonals)
-        offdiagonalblocks[i] = DenseMatrixBlock(offdiagonals[i], rowidcs[i], colidcs[i])
-    end
-
-    for i in eachindex(diagonals)
-        diagonalblocks[i] = DenseMatrixBlock(diagonals[i], drowidcs[i], dcolidcs[i])
-    end
-
-    return SymmetricBlockMatrix(diagonalblocks, offdiagonalblocks, size; ntasks=ntasks)
-end
-
-function SymmetricBlockMatrix(
-    diagonals::Vector{DM}, offdiagonals::Vector{M}, size::Tuple{Int,Int}; ntasks=1
-) where {DM,M}
-    return SymmetricBlockMatrix(diagonals, offdiagonals, size[1], size[2]; ntasks=ntasks)
-end
-
-function SymmetricBlockMatrix(
-    diagonals::Vector{DM}, offdiagonals::Vector{M}, rows::Int, cols::Int; ntasks=1
+    rows::Int,
+    cols::Int;
+    scheduler=SerialScheduler(),
 ) where {DM,M}
     forwardbuffer, adjointbuffer, buffer = buffers(eltype(M), rows, cols)
 
@@ -88,25 +155,16 @@ function SymmetricBlockMatrix(
         _appendindexdict!(offdiagonalscolindexdict, block.colindices, i)
     end
 
-    if offdiagonals != M[]
-        threadsafecolors = [
-            Int[] for _ in
-            1:(2 * (maximum(length.(values(offdiagonalsrowindexdict))) + maximum(
-                length.(values(offdiagonalscolindexdict))
-            )))
-        ]
-    else
-        threadsafecolors = Vector{Int}[]
-    end
-    colorperm = Vector(1:length(threadsafecolors))
-    for i in eachindex(offdiagonals)
-        findcolor!(
-            i, threadsafecolors[colorperm], offdiagonals; threadsafecheck=issymthreadsafe()
-        )
-        sortperm!(colorperm, length.(threadsafecolors))
-    end
+    diagonalcolors = color(conflictgraph(diagonals); algorithm=coloringalgorithm).colors
 
-    return SymmetricBlockMatrix{eltype(M),DM,M,typeof(diagonalsrowindexdict)}(
+    offdiagonalcolors =
+        color(conflictgraph(offdiagonals); algorithm=coloringalgorithm).colors
+    transposeoffdiagonalcolors =
+        color(conflictgraph(offdiagonals; transpose=true); algorithm=coloringalgorithm).colors
+
+    return SymmetricBlockMatrix{
+        eltype(M),DM,M,typeof(diagonalsrowindexdict),typeof(scheduler)
+    }(
         diagonals,
         offdiagonals,
         (rows, cols),
@@ -117,15 +175,44 @@ function SymmetricBlockMatrix(
         diagonalscolindexdict,
         offdiagonalsrowindexdict,
         offdiagonalscolindexdict,
-        threadsafecolors,
-        ntasks,
+        diagonalcolors,
+        offdiagonalcolors,
+        transposeoffdiagonalcolors,
+        scheduler,
     )
 end
 
+"""
+    eachoffdiagonalindex(A::SymmetricBlockMatrix)
+
+Returns an iterator over the indices of the off-diagonal blocks in the given
+`SymmetricBlockMatrix` instance.
+
+# Arguments
+
+  - `A`: The `SymmetricBlockMatrix` instance to query.
+
+# Returns
+
+  - An iterator that yields the indices of the off-diagonal blocks in the `SymmetricBlockMatrix`.
+"""
 function eachoffdiagonalindex(A::SymmetricBlockMatrix)
     return eachindex(A.offdiagonals)
 end
 
+"""
+    eachdiagonalindex(A::SymmetricBlockMatrix)
+
+Returns an iterator over the indices of the diagonal blocks in the given `SymmetricBlockMatrix` instance.
+
+# Arguments
+
+  - `A`: The `SymmetricBlockMatrix` instance to query.
+
+# Returns
+
+  - An iterator that yields the indices of the diagonal blocks in the `SymmetricBlockMatrix`.
+"""
 function eachdiagonalindex(A::SymmetricBlockMatrix)
     return eachindex(A.diagonals)
 end
@@ -150,15 +237,41 @@ function eachdiagonalindex(
     return eachdiagonalindex(A.lmap)
 end
 
+"""
+    offdiagonal(A::SymmetricBlockMatrix, i)
+
+Returns the `i`-th off-diagonal block of the given `SymmetricBlockMatrix` instance.
+
+# Arguments
+
+  - `A`: The `SymmetricBlockMatrix` instance to query.
+  - `i`: The index of the off-diagonal block to retrieve.
+
+# Returns
+
+  - The `i`-th off-diagonal block of the `SymmetricBlockMatrix`.
+"""
 function offdiagonal(A::SymmetricBlockMatrix, i)
     return A.offdiagonals[i]
 end
 
+"""
+    diagonal(A::SymmetricBlockMatrix, i)
+
+Returns the `i`-th diagonal block of the given `SymmetricBlockMatrix` instance.
+
+# Arguments
+
+  - `A`: The `SymmetricBlockMatrix` instance to query.
+  - `i`: The index of the diagonal block to retrieve.
+
+# Returns
+
+  - The `i`-th diagonal block of the `SymmetricBlockMatrix`.
+"""
 function diagonal(A::SymmetricBlockMatrix, i)
     return A.diagonals[i]
 end
-
-ntasks(A::SymmetricBlockMatrix) = A.ntasks
 
 function offdiagonal(
     A::M, i
@@ -168,15 +281,6 @@ end
 
 function diagonal(A::M, i) where {Z<:SymmetricBlockMatrix,T,M<:LinearMaps.AdjointMap{T,Z}}
     return adjoint(diagonal(A.lmap, i))
-end
-
-function ntasks(
-    A::M
-) where {
-    Z<:SymmetricBlockMatrix,
-    M<:Union{Z,LinearMaps.AdjointMap{<:Any,Z},LinearMaps.TransposeMap{<:Any,Z}},
-}
-    return ntasks(A.lmap)
 end
 
 function offdiagonal(
@@ -189,7 +293,103 @@ function diagonal(A::M, i) where {Z<:SymmetricBlockMatrix,T,M<:LinearMaps.Transp
     return transpose(diagonal(A.lmap, i))
 end
 
-function SparseArrays.nnz(A::SymmetricBlockMatrix)
+"""
+    diagonalcolors(A::SymmetricBlockMatrix)
+
+Returns the colors used for the diagonal blocks of the given `SymmetricBlockMatrix` instance.
+These colors are used to coordinate parallel computation and avoid race conditions.
+
+# Arguments
+
+  - `A`: The `SymmetricBlockMatrix` instance to query.
+
+# Returns
+
+  - A vector of colors, where each color is a vector of diagonal block indices that can be
+    processed in parallel without race conditions.
+"""
+function diagonalcolors(A::SymmetricBlockMatrix)
+    return A.diagonalcolors
+end
+
+function diagonalcolors(
+    A::M
+) where {
+    Z<:SymmetricBlockMatrix,
+    T,
+    M<:Union{LinearMaps.AdjointMap{T,Z},LinearMaps.TransposeMap{T,Z}},
+}
+    return diagonalcolors(A.lmap)
+end
+
+"""
+    offdiagonalcolors(A::SymmetricBlockMatrix)
+
+Returns the colors used for the off-diagonal blocks of the given `SymmetricBlockMatrix`
+instance. These colors are used to coordinate parallel computation and avoid race conditions.
+
+# Arguments
+
+  - `A`: The `SymmetricBlockMatrix` instance to query.
+
+# Returns
+
+  - A vector of colors, where each color is a vector of off-diagonal block indices that can be
+    processed in parallel without race conditions.
+"""
+function offdiagonalcolors(A::SymmetricBlockMatrix)
+    return A.offdiagonalcolors
+end
+
+"""
+    transposeoffdiagonalcolors(A::SymmetricBlockMatrix)
+
+Returns the colors used for the transposed off-diagonal blocks of the given
+`SymmetricBlockMatrix` instance. These colors are used to coordinate parallel computation
+and avoid race conditions when computing the transpose of the matrix.
+
+# Arguments
+
+  - `A`: The `SymmetricBlockMatrix` instance to query.
+
+# Returns
+
+  - A vector of colors, where each color is a vector of transposed off-diagonal block indices
+    that can be processed in parallel without race conditions.
+"""
+function transposeoffdiagonalcolors(A::SymmetricBlockMatrix)
+    return A.transposeoffdiagonalcolors
+end
+
+function transposeoffdiagonalcolors(
+    A::M
+) where {
+    Z<:SymmetricBlockMatrix,
+    T,
+    M<:Union{LinearMaps.AdjointMap{T,Z},LinearMaps.TransposeMap{T,Z}},
+}
+    return offdiagonalcolors(A.lmap)
+end
+
+function offdiagonalcolors(
+    A::M
+) where {
+    Z<:SymmetricBlockMatrix,
+    T,
+    M<:Union{LinearMaps.AdjointMap{T,Z},LinearMaps.TransposeMap{T,Z}},
+}
+    return transposeoffdiagonalcolors(A.lmap)
+end
+
+function SparseArrays.nnz(
+    A::M
+) where {
+    M<:Union{
+        SymmetricBlockMatrix,
+        LinearMaps.AdjointMap{<:Any,<:SymmetricBlockMatrix},
+        LinearMaps.TransposeMap{<:Any,<:SymmetricBlockMatrix},
+    },
+}
     nonzeros = 0
     for offdiagonalid in eachoffdiagonalindex(A)
         nonzeros += 2 * nnz(offdiagonal(A, offdiagonalid))
@@ -200,36 +400,87 @@ function SparseArrays.nnz(A::SymmetricBlockMatrix)
     return nonzeros
 end
 
+"""
+    diagonalrowindices(A::SymmetricBlockMatrix, i::Integer)
+
+Returns the indices of the diagonal blocks in the given `SymmetricBlockMatrix` instance that
+contain the row index `i`.
+
+# Arguments
+
+  - `A`: The `SymmetricBlockMatrix` instance to query.
+  - `i`: The row index to search for.
+
+# Returns
+
+  - A vector of indices of the diagonal blocks that contain the row index `i`. If no such
+    blocks exist, an empty vector is returned.
+"""
 function diagonalrowindices(A::SymmetricBlockMatrix, i::Integer)
     !haskey(A.diagonalsrowindexdict, i) && return Int[]
     return A.diagonalsrowindexdict[i]
 end
 
+"""
+    diagonalcolindices(A::SymmetricBlockMatrix, j::Integer)
+
+Returns the indices of the diagonal blocks in the given `SymmetricBlockMatrix` instance that
+contain the column index `j`.
+
+# Arguments
+
+  - `A`: The `SymmetricBlockMatrix` instance to query.
+  - `j`: The column index to search for.
+
+# Returns
+
+  - A vector of indices of the diagonal blocks that contain the column index `j`. If no such
+    blocks exist, an empty vector is returned.
+"""
 function diagonalcolindices(A::SymmetricBlockMatrix, j::Integer)
     !haskey(A.diagonalscolindexdict, j) && return Int[]
     return A.diagonalscolindexdict[j]
 end
 
+"""
+    offdiagonalrowindices(A::SymmetricBlockMatrix, i::Integer)
+
+Returns the indices of the off-diagonal blocks in the given `SymmetricBlockMatrix` instance
+that contain the row index `i`.
+
+# Arguments
+
+  - `A`: The `SymmetricBlockMatrix` instance to query.
+  - `i`: The row index to search for.
+
+# Returns
+
+  - A vector of indices of the off-diagonal blocks that contain the row index `i`. If no such
+    blocks exist, an empty vector is returned.
+"""
 function offdiagonalrowindices(A::SymmetricBlockMatrix, i::Integer)
     !haskey(A.offdiagonalsrowindexdict, i) && return Int[]
     return A.offdiagonalsrowindexdict[i]
 end
 
+"""
+    offdiagonalcolindices(A::SymmetricBlockMatrix, j::Integer)
+
+Returns the indices of the off-diagonal blocks in the given `SymmetricBlockMatrix` instance
+that contain the column index `j`.
+
+# Arguments
+- `A`: The `SymmetricBlockMatrix` instance to query.
+- `j`: The column index to search for.
+
+# Returns
+- A vector of indices of the off-diagonal blocks that contain the column index `j`. If no
+such blocks exist, an empty vector is returned.
+"""
+
 function offdiagonalcolindices(A::SymmetricBlockMatrix, j::Integer)
     !haskey(A.offdiagonalscolindexdict, j) && return Int[]
     return A.offdiagonalscolindexdict[j]
-end
-
-threadsafecolors(A::SymmetricBlockMatrix) = A.threadsafecolors
-
-function threadsafecolors(
-    A::M
-) where {
-    Z<:SymmetricBlockMatrix,
-    T,
-    M<:Union{LinearMaps.AdjointMap{T,Z},LinearMaps.TransposeMap{T,Z}},
-}
-    return threadsafecolors(A.lmap)
 end
 
 function LinearMaps._unsafe_mul!(
@@ -239,13 +490,21 @@ function LinearMaps._unsafe_mul!(
     M<:Union{Z,LinearMaps.AdjointMap{<:Any,Z},LinearMaps.TransposeMap{<:Any,Z}},
 }
     y .= zero(eltype(y))
-    for color in threadsafecolors(A)
+    for color in offdiagonalcolors(A)
         @tasks for blockid in color
-            @set ntasks = ntasks(A)
+            @set scheduler = BlockSparseMatrices.scheduler(A)
             b = offdiagonal(A, blockid)
             LinearAlgebra.mul!(
                 view(y, rowindices(b)), matrix(b), view(x, colindices(b)), true, true
             )
+        end
+    end
+
+    for color in transposeoffdiagonalcolors(A)
+        @tasks for blockid in color
+            @set scheduler = BlockSparseMatrices.scheduler(A)
+            b = offdiagonal(A, blockid)
+
             LinearAlgebra.mul!(
                 view(y, colindices(b)),
                 transpose(matrix(b)),
@@ -255,11 +514,17 @@ function LinearMaps._unsafe_mul!(
             )
         end
     end
-    @tasks for blockid in eachdiagonalindex(A)
-        @set ntasks = ntasks(A)
-        b = diagonal(A, blockid)
-        @inbounds LinearAlgebra.mul!(view(y, rowindices(b)), b, view(x, colindices(b)))
+
+    for color in diagonalcolors(A)
+        @tasks for blockid in color
+            @set scheduler = BlockSparseMatrices.scheduler(A)
+            b = diagonal(A, blockid)
+            LinearAlgebra.mul!(
+                view(y, rowindices(b)), matrix(b), view(x, colindices(b)), true, true
+            )
+        end
     end
+
     return y
 end
 

@@ -1,15 +1,30 @@
-# BlockSparseMatrices.jl
+# BlockSparseMatrices.jl  
 
-This package provides an abstract matrix type for block structured matrices, where the majority of the matrix is zero. 
-This is in general the case for the near interactions in fast methods for the boundary element method. 
+**BlockSparseMatrices.jl** provides a representation for sparse matrices that are composed of a limited number of (dense) blocks.  
+It also includes specialized algorithms for symmetric block‑sparse matrices, storing only the necessary half of the off‑diagonal blocks.  
 
----
-## Installation
+## Key Features  
 
-Installing BlockSparseMatrices is done by entering the package manager (enter `]` at the julia REPL) and issuing:
+- **Block‑sparse storage** – the matrix is built from a small set of (dense) sub‑blocks.  
+- **Symmetric support** – for symmetric block‑sparse matrices only the lower (or upper) triangular block‑structure is kept, reducing memory usage.  
+- **Multithreaded matrix–vector multiplication** – leverages  [OhMyThreads](https://github.com/JuliaFolds2/OhMyThreads.jl) and [GraphsColoring](https://github.com/JuliaGraphs/GraphsColoring.jl) for safe parallelism.  
 
-```
-pkg> add BlockSparseMatrices 
-```
+### Implemented Operations  
 
+| Operation | Description |
+|-----------|-------------|
+| `*` (matrix‑vector product) | Fast, multithreaded multiplication. |
+| `transpose` / `adjoint` | Returns the (adjoint) transpose of a block‑sparse matrix. |
+| `getindex` | Access individual elements of the matrix. |
+| `setindex!` | Modify elements in‑place. |
+| Visualization | Visual inspection via [UnicodePlots](https://github.com/JuliaPlots/UnicodePlots.jl). |
+| `sparse` | Convert to a standard `SparseMatrixCSC` from [SparseArrays](https://github.com/JuliaSparse/SparseArrays.jl). |
 
+## Related Packages  
+
+If you need alternative block‑matrix representations or additional functionality, consider:
+
+- [BlockArrays](https://github.com/JuliaArrays/BlockArrays.jl)
+- [BlockMatrices](https://github.com/gajomi/BlockMatrices.jl)
+- [BlockDiagonals](https://github.com/JuliaArrays/BlockDiagonals.jl)
+- [BlockBandedMatrices](https://github.com/JuliaLinearAlgebra/BlockBandedMatrices.jl)
