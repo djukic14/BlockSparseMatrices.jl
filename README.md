@@ -1,5 +1,3 @@
-
-
 # BlockSparseMatrices
 
 <p align="center">
@@ -11,14 +9,14 @@
 [![Build Status](https://github.com/djukic14/BlockSparseMatrices.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/djukic14/BlockSparseMatrices.jl/actions/workflows/CI.yml?query=branch%3Amain)
 [![Coverage](https://codecov.io/gh/djukic14/BlockSparseMatrices.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/djukic14/BlockSparseMatrices.jl)
 
-
 ## Introduction
-This package provides an AbstractMatrix object that allows to construct sparse block matrices. 
 
-## Installation 
-The package can be installed by 
+BlockSparseMatrices.jl provides a representation for sparse matrices that are composed of a limited number of (dense) blocks. It also includes specialized algorithms for symmetric block‑sparse matrices, storing only the necessary half of the off‑diagonal blocks.
+
+## Installation
+
+The package can be installed by
 
 ```@julia
-import Pkg
-Pkg.add("https://github.com/djukic14/BlockSparseMatrices.jl")
+pkg> add BlockSparseMatrices 
 ```
