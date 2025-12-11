@@ -21,12 +21,9 @@ include("abstractblockmatrix.jl")
 include("coloring.jl")
 include("blockmatrix.jl")
 include("symmetricblockmatrix.jl")
-# include("bcrs.jl")
 include("vbcrs.jl")
 
-export BlockSparseMatrix, SymmetricBlockMatrix
-# export BlockCompressedRowStorage, VariableBlockCompressedRowStorage
-export VariableBlockCompressedRowStorage
+export BlockSparseMatrix, SymmetricBlockMatrix, VariableBlockCompressedRowStorage
 export rowindices, colindices
 export eachblockindex, block
 

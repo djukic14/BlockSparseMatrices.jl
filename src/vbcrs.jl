@@ -81,7 +81,6 @@ end
 
 #TODO: add a second ordering for transpose/adjoint MVP?
 #TODO: add symmetric version of this
-#TODO: add a conversoin from SymmetricBlockSparseMatrix to VariableBlockCompressedRowStorage
 function VariableBlockCompressedRowStorage(
     bsm::BlockSparseMatrix{T,M}; scheduler=bsm.scheduler
 ) where {T,M}
@@ -90,6 +89,18 @@ function VariableBlockCompressedRowStorage(
         _RowIndexFunctor(bsm),
         _ColIndexFunctor(bsm),
         size(bsm);
+        scheduler=scheduler,
+    )
+end
+
+function VariableBlockCompressedRowStorage(
+    sbm::SymmetricBlockMatrix{T,D,P,M}; scheduler=sbm.scheduler
+) where {T,D,P,M}
+    return VariableBlockCompressedRowStorage(
+        _SymmetricMatrixFunctor(sbm),
+        _SymmetricRowIndexFunctor(sbm),
+        _SymmetricColIndexFunctor(sbm),
+        size(sbm);
         scheduler=scheduler,
     )
 end
@@ -110,6 +121,50 @@ for (FunctorName, accessor, lengthfield) in [
 
         function Base.length(f::$FunctorName)
             return length(f.b.$lengthfield)
+        end
+    end
+end
+
+for (FunctorName, diag_accessor, offdiag_accessor, transpose_offdiag_accessor) in [
+    (
+        :_SymmetricMatrixFunctor,
+        :(f.b.diagonals[i]),
+        :(f.b.offdiagonals[i - ndiag]),
+        :(transpose(f.b.offdiagonals[i - ndiag - noffdiag])),
+    ),
+    (
+        :_SymmetricRowIndexFunctor,
+        :(first(f.b.diagonalindices[i])),
+        :(first(f.b.rowindices[i - ndiag])),
+        :(first(f.b.colindices[i - ndiag - noffdiag])),
+    ),
+    (
+        :_SymmetricColIndexFunctor,
+        :(first(f.b.diagonalindices[i])),
+        :(first(f.b.colindices[i - ndiag])),
+        :(first(f.b.rowindices[i - ndiag - noffdiag])),
+    ),
+]
+    @eval begin
+        struct $FunctorName{B}
+            b::B
+        end
+
+        function Base.getindex(f::$FunctorName, i::Int)
+            ndiag = length(f.b.diagonals)
+            noffdiag = length(f.b.offdiagonals)
+
+            if i <= ndiag
+                return $diag_accessor
+            elseif i <= ndiag + noffdiag
+                return $offdiag_accessor
+            else
+                return $transpose_offdiag_accessor
+            end
+        end
+
+        function Base.length(f::$FunctorName)
+            return length(f.b.diagonals) + 2 * length(f.b.offdiagonals)
         end
     end
 end
