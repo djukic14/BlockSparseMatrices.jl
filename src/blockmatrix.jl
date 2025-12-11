@@ -20,8 +20,10 @@ smaller dense matrix blocks.
     vector of block indices that can be processed in parallel without race conditions.
   - `scheduler`: A scheduler that manages the parallel computation of matrix-vector products.
 """
-struct BlockSparseMatrix{T,M,S} <: AbstractBlockMatrix{T}
+struct BlockSparseMatrix{T,M,P<:Integer,S} <: AbstractBlockMatrix{T}
     blocks::Vector{M}
+    rowindices::Vector{Vector{P}}
+    colindices::Vector{Vector{P}}
     size::Tuple{Int,Int}
     colors::Vector{Vector{Int}}
     transposecolors::Vector{Vector{Int}}
@@ -33,59 +35,16 @@ end
 """
     BlockSparseMatrix(
         blocks::Vector{M},
-        rowindices::V,
-        colindices::V,
-        size::Tuple{Int,Int};
-        coloringalgorithm=coloringalgorithm,
-        scheduler=DynamicScheduler(),
-    ) where {M,V}
-
-Constructs a new `BlockSparseMatrix` instance from the given blocks, row indices, column
-indices, and size.
-
-# Arguments
-
-  - `blocks`: A vector of dense matrices.
-  - `rowindices`: A vector of row indices corresponding to each block.
-  - `colindices`: A vector of column indices corresponding to each block.
-  - `size`: A tuple representing the size of the block sparse matrix.
-  - `coloringalgorithm`: The algorithm from `GraphsColoring.jl` used to color the blocks for
-    parallel computation. Defaults to `coloringalgorithm`.
-  - `scheduler`: The scheduler used to manage parallel computation. Defaults to `SerialScheduler()`.
-
-# Returns
-
-  - A new `BlockSparseMatrix` instance constructed from the given blocks, row indices, column indices, and size.
-"""
-function BlockSparseMatrix(
-    blocks::Vector{M},
-    rowindices::V,
-    colindices::V,
-    size::Tuple{Int,Int};
-    coloringalgorithm=coloringalgorithm,
-    scheduler=SerialScheduler(),
-) where {M,V}
-    return BlockSparseMatrix(
-        denseblocks(blocks, rowindices, colindices),
-        size;
-        coloringalgorithm=coloringalgorithm,
-        scheduler=scheduler,
-    )
-end
-
-"""
-    BlockSparseMatrix(
-        blocks::Vector{M},
         size::Tuple{Int,Int};
         coloringalgorithm=coloringalgorithm,
         scheduler=SerialScheduler(),
-    ) where {M<:AbstractMatrixBlock}
+    )
 
 Constructs a new `BlockSparseMatrix` instance from the given blocks and size.
 
 # Arguments
 
-  - `blocks`: A vector of `AbstractMatrixBlock` instances.
+  - `blocks`: A vector of blocks
   - `size`: A tuple representing the size of the block sparse matrix.
   - `coloringalgorithm`: The algorithm from `GraphsColoring.jl` used to color the blocks for
     parallel computation. Defaults to `coloringalgorithm`.
@@ -96,38 +55,51 @@ Constructs a new `BlockSparseMatrix` instance from the given blocks and size.
   - A new `BlockSparseMatrix` instance constructed from the given blocks and size.
 """
 function BlockSparseMatrix(
-    blocks::Vector{M},
+    blocks,
+    rowindices,
+    colindices,
     size::Tuple{Int,Int};
     coloringalgorithm=coloringalgorithm,
     scheduler=SerialScheduler(),
-) where {M<:AbstractMatrixBlock}
+)
     return BlockSparseMatrix(
-        blocks, size[1], size[2]; coloringalgorithm=coloringalgorithm, scheduler=scheduler
+        blocks,
+        rowindices,
+        colindices,
+        size[1],
+        size[2];
+        coloringalgorithm=coloringalgorithm,
+        scheduler=scheduler,
     )
 end
 
 function BlockSparseMatrix(
-    blocks::Vector{M},
+    blocks,
+    rowindices,
+    colindices,
     rows::Int,
     cols::Int;
     scheduler=SerialScheduler(),
     coloringalgorithm=coloringalgorithm,
-) where {M<:AbstractMatrixBlock}
-    sort!(blocks; lt=islessinordering)
-
+)
     # no coloring needed for single-threaded execution
     colors, transposecolors = if isserial(scheduler)
         [eachindex(blocks)], [eachindex(blocks)]
     else
         colors =
-            color(conflictgraph(blocks; transpose=false); algorithm=coloringalgorithm).colors
+            color(conflictgraph(ColorInfo(rowindices)); algorithm=coloringalgorithm).colors
         transposecolors =
-            color(conflictgraph(blocks; transpose=true); algorithm=coloringalgorithm).colors
+            color(conflictgraph(ColorInfo(colindices)); algorithm=coloringalgorithm).colors
         colors, transposecolors
     end
 
-    return BlockSparseMatrix{eltype(M),M,typeof(scheduler)}(
-        blocks, (rows, cols), colors, transposecolors, scheduler
+    return BlockSparseMatrix{
+        eltype(eltype(typeof(blocks))),
+        eltype(blocks),
+        eltype(eltype(rowindices)),
+        typeof(scheduler),
+    }(
+        blocks, rowindices, colindices, (rows, cols), colors, transposecolors, scheduler
     )
 end
 
@@ -239,7 +211,7 @@ function SparseArrays.nnz(
 }
     nonzeros = 0
     for blockid in eachblockindex(A)
-        nonzeros += nnz(block(A, blockid))
+        nonzeros += _nnz(block(A, blockid))
     end
 
     return nonzeros
@@ -256,9 +228,12 @@ function LinearMaps._unsafe_mul!(
         @tasks for blockid in color
             @set scheduler = BlockSparseMatrices.scheduler(A)
 
-            b = block(A, blockid)
             @inbounds LinearAlgebra.mul!(
-                view(y, rowindices(b)), b, view(x, colindices(b)), α, true
+                view(y, rowindices(A, blockid)),
+                block(A, blockid),
+                view(x, colindices(A, blockid)),
+                α,
+                true,
             )
         end
     end

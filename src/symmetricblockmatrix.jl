@@ -26,58 +26,17 @@ The diagonal blocks are symmetric as well.
     race conditions.
   - `scheduler`: A scheduler that manages the parallel computation of matrix-vector products.
 """
-struct SymmetricBlockMatrix{T,D,M,S} <: AbstractBlockMatrix{T}
+struct SymmetricBlockMatrix{T,D,P,M,S} <: AbstractBlockMatrix{T}
     diagonals::Vector{D}
+    diagonalindices::Vector{Vector{P}}
     offdiagonals::Vector{M}
+    rowindices::Vector{Vector{P}}
+    colindices::Vector{Vector{P}}
     size::Tuple{Int,Int}
     diagonalcolors::Vector{Vector{Int}}
     offdiagonalcolors::Vector{Vector{Int}}
     transposeoffdiagonalcolors::Vector{Vector{Int}}
     scheduler::S
-end
-
-"""
-    SymmetricBlockMatrix(
-        diagonals::Vector{D},
-        diagonalindices::V,
-        offdiagonals::Vector{M},
-        rowindices::V,
-        columnindices::V,
-        size::Tuple{Int,Int};
-        scheduler=DynamicScheduler(),
-    ) where {D,M,V}
-
-Constructs a new `SymmetricBlockMatrix` instance from the given diagonal and off-diagonal blocks, indices, and size.
-
-# Arguments
-
-  - `diagonals`: A vector of symmetric dense matrices.
-  - `diagonalindices`: A vector of indices corresponding to the diagonal blocks.
-  - `offdiagonals`: A vector of dense matrices.
-  - `rowindices`: A vector of row indices corresponding to the off-diagonal blocks.
-  - `columnindices`: A vector of column indices corresponding to the off-diagonal blocks.
-  - `size`: A tuple representing the size of the symmetric block matrix.
-  - `scheduler`: The scheduler used to manage parallel computation. Defaults to `DynamicScheduler()`.
-
-# Returns
-
-  - A new `SymmetricBlockMatrix` instance constructed from the given blocks, indices, and size.
-"""
-function SymmetricBlockMatrix(
-    diagonals::Vector{D},
-    diagonalindices::V,
-    offdiagonals::Vector{M},
-    rowindices::V,
-    columnindices::V,
-    size::Tuple{Int,Int};
-    scheduler=DynamicScheduler(),
-) where {D,M,V}
-    return SymmetricBlockMatrix(
-        denseblocks(diagonals, diagonalindices, diagonalindices),
-        denseblocks(offdiagonals, rowindices, columnindices),
-        size;
-        scheduler=scheduler,
-    )
 end
 
 """
@@ -102,36 +61,52 @@ Constructs a new `SymmetricBlockMatrix` instance from the given diagonal and off
   - A new `SymmetricBlockMatrix` instance constructed from the given blocks and size.
 """
 function SymmetricBlockMatrix(
-    diagonals::Vector{D},
-    offdiagonals::Vector{M},
+    diagonals,
+    diagonalindices,
+    offdiagonals,
+    rowindices,
+    colindices,
     size::Tuple{Int,Int};
     scheduler=DynamicScheduler(),
-) where {D<:AbstractMatrixBlock,M<:AbstractMatrixBlock}
+)
     return SymmetricBlockMatrix(
-        diagonals, offdiagonals, size[1], size[2]; scheduler=scheduler
+        diagonals,
+        diagonalindices,
+        offdiagonals,
+        rowindices,
+        colindices,
+        size[1],
+        size[2];
+        scheduler=scheduler,
     )
 end
 
 function SymmetricBlockMatrix(
     diagonals::Vector{D},
+    diagonalindices,
     offdiagonals::Vector{M},
+    rowindices,
+    colindices,
     rows::Int,
     cols::Int;
     scheduler=SerialScheduler(),
 ) where {D,M}
-    sort!(diagonals; lt=islessinordering)
-    sort!(offdiagonals; lt=islessinordering)
-
-    diagonalcolors = color(conflictgraph(diagonals); algorithm=coloringalgorithm).colors
+    diagonalcolors =
+        color(conflictgraph(ColorInfo(diagonalindices)); algorithm=coloringalgorithm).colors
 
     offdiagonalcolors =
-        color(conflictgraph(offdiagonals); algorithm=coloringalgorithm).colors
+        color(conflictgraph(ColorInfo(rowindices)); algorithm=coloringalgorithm).colors
     transposeoffdiagonalcolors =
-        color(conflictgraph(offdiagonals; transpose=true); algorithm=coloringalgorithm).colors
+        color(conflictgraph(ColorInfo(colindices)); algorithm=coloringalgorithm).colors
 
-    return SymmetricBlockMatrix{eltype(M),D,M,typeof(scheduler)}(
+    return SymmetricBlockMatrix{
+        eltype(eltype(D)),D,eltype(eltype(rowindices)),M,typeof(scheduler)
+    }(
         diagonals,
+        diagonalindices,
         offdiagonals,
+        rowindices,
+        colindices,
         (rows, cols),
         diagonalcolors,
         offdiagonalcolors,
@@ -339,6 +314,46 @@ function offdiagonalcolors(
     return transposeoffdiagonalcolors(A.lmap)
 end
 
+function diagonalindices(A::SymmetricBlockMatrix, blockid)
+    return A.diagonalindices[blockid]
+end
+
+function diagonalindices(
+    A::M, blockid
+) where {
+    Z<:SymmetricBlockMatrix,
+    T,
+    M<:Union{LinearMaps.AdjointMap{T,Z},LinearMaps.TransposeMap{T,Z}},
+}
+    return diagonalindices(A.lmap, blockid)
+end
+
+function rowindices(A::Union{BlockSparseMatrix,SymmetricBlockMatrix}, blockid)
+    return A.rowindices[blockid]
+end
+
+function rowindices(
+    A::M, blockid
+) where {
+    Z<:Union{BlockSparseMatrix,SymmetricBlockMatrix},
+    M<:Union{LinearMaps.AdjointMap{<:Any,Z},LinearMaps.TransposeMap{<:Any,Z}},
+}
+    return A.lmap.colindices[blockid]
+end
+
+function colindices(A::Union{BlockSparseMatrix,SymmetricBlockMatrix}, blockid)
+    return A.colindices[blockid]
+end
+
+function colindices(
+    A::M, blockid
+) where {
+    Z<:Union{BlockSparseMatrix,SymmetricBlockMatrix},
+    M<:Union{LinearMaps.AdjointMap{<:Any,Z},LinearMaps.TransposeMap{<:Any,Z}},
+}
+    return A.lmap.rowindices[blockid]
+end
+
 function SparseArrays.nnz(
     A::M
 ) where {
@@ -350,10 +365,10 @@ function SparseArrays.nnz(
 }
     nonzeros = 0
     for offdiagonalid in eachoffdiagonalindex(A)
-        nonzeros += 2 * nnz(offdiagonal(A, offdiagonalid))
+        nonzeros += 2 * _nnz(offdiagonal(A, offdiagonalid))
     end
     for diagonalid in eachdiagonalindex(A)
-        nonzeros += nnz(diagonal(A, diagonalid))
+        nonzeros += _nnz(diagonal(A, diagonalid))
     end
     return nonzeros
 end
@@ -369,9 +384,12 @@ function LinearMaps._unsafe_mul!(
     for color in offdiagonalcolors(A)
         @tasks for blockid in color
             @set scheduler = BlockSparseMatrices.scheduler(A)
-            b = offdiagonal(A, blockid)
             LinearAlgebra.mul!(
-                view(y, rowindices(b)), matrix(b), view(x, colindices(b)), α, true
+                view(y, rowindices(A, blockid)),
+                offdiagonal(A, blockid),
+                view(x, colindices(A, blockid)),
+                α,
+                true,
             )
         end
     end
@@ -379,12 +397,10 @@ function LinearMaps._unsafe_mul!(
     for color in transposeoffdiagonalcolors(A)
         @tasks for blockid in color
             @set scheduler = BlockSparseMatrices.scheduler(A)
-            b = offdiagonal(A, blockid)
-
             LinearAlgebra.mul!(
-                view(y, colindices(b)),
-                transpose(matrix(b)),
-                view(x, rowindices(b)),
+                view(y, colindices(A, blockid)),
+                transpose(offdiagonal(A, blockid)),
+                view(x, rowindices(A, blockid)),
                 α,
                 true,
             )
@@ -396,7 +412,11 @@ function LinearMaps._unsafe_mul!(
             @set scheduler = BlockSparseMatrices.scheduler(A)
             b = diagonal(A, blockid)
             LinearAlgebra.mul!(
-                view(y, rowindices(b)), matrix(b), view(x, colindices(b)), α, true
+                view(y, diagonalindices(A, blockid)),
+                b,
+                view(x, diagonalindices(A, blockid)),
+                α,
+                true,
             )
         end
     end

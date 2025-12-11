@@ -25,7 +25,14 @@ function rowcolvals(
     vals = eltype(A)[]
     for color in colors(A)
         for blockid in color
-            _pushblocktoarrays!(block(A, blockid), rows, cols, vals)
+            _pushblocktoarrays!(
+                rows,
+                cols,
+                block(A, blockid),
+                rowindices(A, blockid),
+                colindices(A, blockid),
+                vals,
+            )
         end
     end
 
@@ -43,19 +50,40 @@ function rowcolvals(
     vals = eltype(A)[]
     for color in offdiagonalcolors(A)
         for blockid in color
-            _pushblocktoarrays!(offdiagonal(A, blockid), rows, cols, vals)
+            _pushblocktoarrays!(
+                rows,
+                cols,
+                offdiagonal(A, blockid),
+                rowindices(A, blockid),
+                colindices(A, blockid),
+                vals,
+            )
         end
     end
 
     for color in transposeoffdiagonalcolors(A)
         for blockid in color
-            _pushblocktoarrays!(transpose(offdiagonal(A, blockid)), rows, cols, vals)
+            _pushblocktoarrays!(
+                rows,
+                cols,
+                transpose(offdiagonal(A, blockid)),
+                colindices(A, blockid),
+                rowindices(A, blockid),
+                vals,
+            )
         end
     end
 
     for color in diagonalcolors(A)
         for blockid in color
-            _pushblocktoarrays!(diagonal(A, blockid), rows, cols, vals)
+            _pushblocktoarrays!(
+                rows,
+                cols,
+                diagonal(A, blockid),
+                diagonalindices(A, blockid),
+                diagonalindices(A, blockid),
+                vals,
+            )
         end
     end
 
@@ -100,12 +128,12 @@ function SparseArrays.sparse(A::AbstractBlockMatrix)
     return SparseArrays.sparse(rowcolvals(A)..., size(A)...)
 end
 
-function _pushblocktoarrays!(b, rows, cols, vals)
-    for (i, rowindex) in enumerate(rowindices(b))
-        for (j, colindex) in enumerate(colindices(b))
+function _pushblocktoarrays!(rows, cols, b, rowindices, colindices, vals)
+    for (i, rowindex) in enumerate(rowindices)
+        for (j, colindex) in enumerate(colindices)
             push!(rows, rowindex)
             push!(cols, colindex)
-            push!(vals, matrix(b)[i, j])
+            push!(vals, b[i, j])
         end
     end
 end

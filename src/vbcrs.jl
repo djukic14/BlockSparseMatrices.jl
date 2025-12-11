@@ -81,7 +81,7 @@ end
 
 #TODO: add a second ordering for transpose/adjoint MVP?
 #TODO: add symmetric version of this
-
+#TODO: add a conversoin from SymmetricBlockSparseMatrix to VariableBlockCompressedRowStorage
 function VariableBlockCompressedRowStorage(
     bsm::BlockSparseMatrix{T,M}; scheduler=bsm.scheduler
 ) where {T,M}
@@ -95,9 +95,9 @@ function VariableBlockCompressedRowStorage(
 end
 
 for (FunctorName, accessor, lengthfield) in [
-    (:_MatrixFunctor, :(matrix(f.b.blocks[i])), :blocks),
-    (:_RowIndexFunctor, :(first(rowindices(f.b.blocks[i]))), :blocks),
-    (:_ColIndexFunctor, :(first(colindices(f.b.blocks[i]))), :blocks),
+    (:_MatrixFunctor, :(f.b.blocks[i]), :blocks),
+    (:_RowIndexFunctor, :(first(rowindices(f.b, i))), :blocks),
+    (:_ColIndexFunctor, :(first(colindices(f.b, i))), :blocks),
 ]
     @eval begin
         struct $FunctorName{B}

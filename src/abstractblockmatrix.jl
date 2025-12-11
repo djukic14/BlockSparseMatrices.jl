@@ -60,3 +60,11 @@ function scheduler(
 }
     return scheduler(A.lmap)
 end
+
+function _nnz(A)
+    return SparseArrays.nnz(A)
+end
+
+function _nnz(A::AbstractArray)
+    return prod(size(A))
+end
