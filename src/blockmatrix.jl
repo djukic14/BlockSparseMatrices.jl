@@ -1,5 +1,5 @@
 """
-    struct BlockSparseMatrix{T,M,D,S} <: AbstractBlockMatrix{T}
+    struct BlockSparseMatrix{T,M,S} <: AbstractBlockMatrix{T}
 
 A concrete implementation of a block sparse matrix, which is a sparse matrix composed of
 smaller dense matrix blocks.
@@ -8,36 +8,27 @@ smaller dense matrix blocks.
 
   - `T`: The element type of the matrix.
   - `M`: The type of the matrix blocks.
-  - `D`: The type of the row and column index dictionaries.
   - `S`: The type of the scheduler.
 
 # Fields
 
   - `blocks`: A vector of matrix blocks that comprise the block sparse matrix.
   - `size`: A tuple representing the size of the block sparse matrix.
-  - `forwardbuffer`: A buffer used for forward matrix-vector product computations.
-  - `adjointbuffer`: A buffer used for adjoint matrix-vector product computations.
-  - `buffer`: The underlying buffer that is reused for both forward and adjoint products.
-  - `rowindexdict`: A dictionary that maps row indices to block indices.
-  - `colindexdict`: A dictionary that maps column indices to block indices.
   - `colors`: A vector of colors, where each color is a vector of block indices that can be
     processed in parallel without race conditions.
   - `transposecolors`: A vector of colors for the transpose matrix, where each color is a
     vector of block indices that can be processed in parallel without race conditions.
   - `scheduler`: A scheduler that manages the parallel computation of matrix-vector products.
 """
-struct BlockSparseMatrix{T,M,D,S} <: AbstractBlockMatrix{T}
+struct BlockSparseMatrix{T,M,S} <: AbstractBlockMatrix{T}
     blocks::Vector{M}
     size::Tuple{Int,Int}
-    forwardbuffer::Vector{T}
-    adjointbuffer::Vector{T}
-    buffer::Vector{T}
-    rowindexdict::D
-    colindexdict::D #TODO: find smarter way to search for entries in matrix
     colors::Vector{Vector{Int}}
     transposecolors::Vector{Vector{Int}}
     scheduler::S
 end
+
+#TODO: remove blocks from here and use same style as vbcrs
 
 """
     BlockSparseMatrix(
@@ -122,17 +113,7 @@ function BlockSparseMatrix(
     scheduler=SerialScheduler(),
     coloringalgorithm=coloringalgorithm,
 ) where {M<:AbstractMatrixBlock}
-    forwardbuffer, adjointbuffer, buffer = buffers(eltype(M), rows, cols)
-
     sort!(blocks; lt=islessinordering)
-
-    rowindexdict = Dict{Int,Vector{Int}}()
-    colindexdict = Dict{Int,Vector{Int}}()
-
-    for (i, block) in enumerate(blocks)
-        _appendindexdict!(rowindexdict, block.rowindices, i)
-        _appendindexdict!(colindexdict, block.colindices, i)
-    end
 
     # no coloring needed for single-threaded execution
     colors, transposecolors = if isserial(scheduler)
@@ -145,17 +126,8 @@ function BlockSparseMatrix(
         colors, transposecolors
     end
 
-    return BlockSparseMatrix{eltype(M),M,typeof(rowindexdict),typeof(scheduler)}(
-        blocks,
-        (rows, cols),
-        forwardbuffer,
-        adjointbuffer,
-        buffer,
-        rowindexdict,
-        colindexdict,
-        colors,
-        transposecolors,
-        scheduler,
+    return BlockSparseMatrix{eltype(M),M,typeof(scheduler)}(
+        blocks, (rows, cols), colors, transposecolors, scheduler
     )
 end
 
@@ -274,18 +246,20 @@ function SparseArrays.nnz(
 end
 
 function LinearMaps._unsafe_mul!(
-    y::AbstractVector, A::M, x::AbstractVector
+    y::AbstractVector, A::M, x::AbstractVector, α::Number, β::Number
 ) where {
     Z<:BlockSparseMatrix,
     M<:Union{Z,LinearMaps.AdjointMap{<:Any,Z},LinearMaps.TransposeMap{<:Any,Z}},
 }
-    y .= zero(eltype(y))
+    y .*= β
     for color in colors(A)
         @tasks for blockid in color
             @set scheduler = BlockSparseMatrices.scheduler(A)
 
             b = block(A, blockid)
-            @inbounds LinearAlgebra.mul!(view(y, rowindices(b)), b, view(x, colindices(b)))
+            @inbounds LinearAlgebra.mul!(
+                view(y, rowindices(b)), b, view(x, colindices(b)), α, true
+            )
         end
     end
 

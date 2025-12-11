@@ -76,12 +76,15 @@ function Base.size(
 end
 
 function LinearMaps._unsafe_mul!(
-    y::AbstractVector, block::M, x::AbstractVector
+    y::AbstractVector, block::M, x::AbstractVector, α::ALPHA, β::BETA
 ) where {
+    ALPHA<:Number,
+    BETA<:Number,
     A<:AbstractMatrixBlock,
-    M<:Union{A,LinearMaps.AdjointMap{<:Any,A},LinearMaps.TransposeMap{<:Any,A}},
+    T,
+    M<:Union{A,LinearMaps.AdjointMap{T,A},LinearMaps.TransposeMap{T,A}},
 }
-    LinearAlgebra.mul!(y, matrix(block), x, true, true)
+    LinearAlgebra.mul!(y, matrix(block), x, α, β)
 
     return y
 end

@@ -22,8 +22,12 @@ include("matrixblock/abstractmatrixblock.jl")
 include("matrixblock/densematrixblock.jl")
 include("blockmatrix.jl")
 include("symmetricblockmatrix.jl")
+# include("bcrs.jl")
+include("vbcrs.jl")
 
 export DenseMatrixBlock, BlockSparseMatrix, SymmetricBlockMatrix
+# export BlockCompressedRowStorage, VariableBlockCompressedRowStorage
+export VariableBlockCompressedRowStorage
 export rowindices, colindices
 export eachblockindex, block
 

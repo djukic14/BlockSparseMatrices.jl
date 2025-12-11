@@ -62,6 +62,40 @@ function rowcolvals(
     return rows, cols, vals
 end
 
+function rowcolvals(A::VariableBlockCompressedRowStorage)
+    # Count total number of non-zero entries
+    total_nnz = nnz(A)
+
+    # Pre-allocate arrays for sparse matrix construction
+    rows = Vector{Int}(undef, total_nnz)
+    cols = Vector{Int}(undef, total_nnz)
+    vals = Vector{eltype(A)}(undef, total_nnz)
+
+    idx = 1
+    for browidx in 1:(length(A.rowptr) - 1)
+        for bidx in A.rowptr[browidx]:(A.rowptr[browidx + 1] - 1)
+            block = A.blocks[bidx]
+            row_start = A.rowindices[bidx]
+            col_start = A.colindices[bidx]
+            nrows, ncols = size(block)
+
+            # Fill in the entries from this block
+            for j in 1:ncols
+                for i in 1:nrows
+                    rows[idx] = row_start + i - 1
+                    cols[idx] = col_start + j - 1
+                    vals[idx] = block[i, j]
+                    idx += 1
+                end
+            end
+        end
+    end
+
+    return rows, cols, vals
+end
+
+#TODO: for vbcrs and bcrs write function that constructs sparse matrix directly without
+# calling sparse(rowcolvals(...))
 function SparseArrays.sparse(A::AbstractBlockMatrix)
     return SparseArrays.sparse(rowcolvals(A)..., size(A)...)
 end
