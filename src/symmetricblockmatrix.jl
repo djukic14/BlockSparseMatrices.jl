@@ -1,5 +1,5 @@
 """
-    struct SymmetricBlockMatrix{T,D,M,D,S} <: AbstractBlockMatrix{T}
+    struct SymmetricBlockMatrix{T,D,P,M,S} <: AbstractBlockMatrix{T}
 
 A concrete implementation of a symmetric block matrix, which is a block matrix where the
 off-diagonal blocks are shared between the upper and lower triangular parts.
@@ -9,13 +9,17 @@ The diagonal blocks are symmetric as well.
 
   - `T`: The element type of the matrix.
   - `D`: The type of the diagonal matrix blocks.
+  - `P`: The integer type used for indexing.
   - `M`: The type of the off-diagonal matrix blocks.
   - `S`: The type of the scheduler.
 
 # Fields
 
   - `diagonals`: A vector of diagonal matrix blocks.
+  - `diagonalindices`: A vector where each element is a vector of indices for the corresponding diagonal block.
   - `offdiagonals`: A vector of off-diagonal matrix blocks.
+  - `rowindices`: A vector where each element is a vector of row indices for the corresponding off-diagonal block.
+  - `colindices`: A vector where each element is a vector of column indices for the corresponding off-diagonal block.
   - `size`: A tuple representing the size of the symmetric block matrix.
   - `diagonalcolors`: A vector of colors for the diagonal blocks, where each color is a vector
     of block indices that can be processed in parallel without race conditions.
@@ -41,24 +45,30 @@ end
 
 """
     SymmetricBlockMatrix(
-        diagonals::Vector{D},
-        offdiagonals::Vector{M},
+        diagonals,
+        diagonalindices,
+        offdiagonals,
+        rowindices,
+        colindices,
         size::Tuple{Int,Int};
         scheduler=DynamicScheduler(),
-    ) where {D<:AbstractMatrixBlock,M<:AbstractMatrixBlock}
+    )
 
-Constructs a new `SymmetricBlockMatrix` instance from the given diagonal and off-diagonal blocks, and size.
+Constructs a new `SymmetricBlockMatrix` instance from the given diagonal and off-diagonal blocks with their indices.
 
 # Arguments
 
-  - `diagonals`: A vector of `AbstractMatrixBlock` instances.
-  - `offdiagonals`: A vector of `AbstractMatrixBlock` instances.
+  - `diagonals`: A vector of diagonal matrix blocks.
+  - `diagonalindices`: A vector where each element is a vector of indices for the corresponding diagonal block.
+  - `offdiagonals`: A vector of off-diagonal matrix blocks.
+  - `rowindices`: A vector where each element is a vector of row indices for the corresponding off-diagonal block.
+  - `colindices`: A vector where each element is a vector of column indices for the corresponding off-diagonal block.
   - `size`: A tuple representing the size of the symmetric block matrix.
   - `scheduler`: The scheduler used to manage parallel computation. Defaults to `DynamicScheduler()`.
 
 # Returns
 
-  - A new `SymmetricBlockMatrix` instance constructed from the given blocks and size.
+  - A new `SymmetricBlockMatrix` instance constructed from the given blocks and indices.
 """
 function SymmetricBlockMatrix(
     diagonals,

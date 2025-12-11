@@ -1,3 +1,38 @@
+"""
+    struct VariableBlockCompressedRowStorage{T,M,P,S} <: AbstractBlockMatrix{T}
+
+A compressed row storage format for block sparse matrices with variable-sized blocks.
+This format stores blocks in row-major order, enabling efficient matrix-vector products
+and parallel computation.
+
+# Type Parameters
+
+  - `T`: The element type of the matrix.
+  - `M`: The type of the matrix blocks.
+  - `P`: The integer type used for indexing.
+  - `S`: The type of the scheduler.
+
+# Fields
+
+  - `blocks`: A vector of matrix blocks stored in row-major order.
+  - `rowptr`: A vector of pointers indicating the start of each block row in the `blocks` vector.
+    Similar to CSR format, `rowptr[i]` points to the first block of the i-th block row.
+  - `colindices`: A vector where each element is the starting column index of the corresponding block.
+    The indices for each block must be contiguous (e.g., if a block starts at column 5 and has 3 columns,
+    it occupies columns 5, 6, and 7).
+  - `rowindices`: A vector where each element is the starting row index of the corresponding block.
+    The indices for each block must be contiguous (e.g., if a block starts at row 10 and has 4 rows,
+    it occupies rows 10, 11, 12, and 13).
+  - `size`: A tuple representing the total size of the matrix.
+  - `scheduler`: A scheduler that manages the parallel computation of matrix-vector products.
+
+# Notes
+
+  - Blocks are sorted by row index first, then by column index within each row.
+  - The compressed row storage format allows efficient parallel computation across block rows.
+  - This format is particularly efficient for matrix-vector products and can handle variable-sized blocks.
+  - Each block must occupy a contiguous range of row and column indices.
+"""
 struct VariableBlockCompressedRowStorage{T,M,P<:Integer,S} <: AbstractBlockMatrix{T}
     blocks::Vector{M}
     rowptr::Vector{P}
@@ -9,27 +44,36 @@ end
 
 """
     VariableBlockCompressedRowStorage(
-        matrices::Vector{M},
-        rowindices::Vector{V},
-        colindices::Vector{V},
+        matrices,
+        rowindices,
+        colindices,
         matrixsize::Tuple{Int,Int};
         scheduler = SerialScheduler()
-    ) where {M,V}
+    )
 
 Constructs a `VariableBlockCompressedRowStorage` from vectors of matrices and their corresponding
-row and column indices.
+row and column indices. The blocks are automatically sorted by row index first, then by column index,
+and stored in compressed row storage format.
 
 # Arguments
 
   - `matrices`: A vector of matrices representing the blocks.
   - `rowindices`: A vector where each element is the starting row index of the corresponding block.
+    Each block must occupy contiguous row indices starting from this value.
   - `colindices`: A vector where each element is the starting column index of the corresponding block.
+    Each block must occupy contiguous column indices starting from this value.
   - `matrixsize`: The total size of the matrix as a tuple `(nrows, ncols)`.
-  - `scheduler`: A scheduler for parallel computation.
+  - `scheduler`: A scheduler for parallel computation. Defaults to `SerialScheduler()`.
 
 # Returns
 
   - A `VariableBlockCompressedRowStorage` instance with compressed row storage format.
+
+# Notes
+
+  - Blocks do not need to be provided in sorted order; they will be sorted internally.
+  - The row and column indices for each block must be contiguous.
+  - Blocks with the same row index are grouped together in the compressed format.
 """
 function VariableBlockCompressedRowStorage(
     matrices, rowindices, colindices, matrixsize; scheduler=SerialScheduler()
@@ -81,6 +125,30 @@ end
 
 #TODO: add a second ordering for transpose/adjoint MVP?
 #TODO: add symmetric version of this
+
+"""
+    VariableBlockCompressedRowStorage(
+        bsm::BlockSparseMatrix;
+        scheduler=bsm.scheduler
+    )
+
+Converts a `BlockSparseMatrix` to `VariableBlockCompressedRowStorage` format.
+
+# Arguments
+
+  - `bsm`: A `BlockSparseMatrix` to convert.
+  - `scheduler`: A scheduler for parallel computation. Defaults to the scheduler from `bsm`.
+
+# Returns
+
+  - A `VariableBlockCompressedRowStorage` instance in compressed row storage format.
+
+# Notes
+
+  - No sanity checks are performed on the input matrix. It is assumed that the blocks in the
+    `BlockSparseMatrix` have contiguous row and column indices.
+  - The conversion uses lazy functors to avoid unnecessary memory allocations during construction.
+"""
 function VariableBlockCompressedRowStorage(
     bsm::BlockSparseMatrix{T,M}; scheduler=bsm.scheduler
 ) where {T,M}
@@ -93,6 +161,33 @@ function VariableBlockCompressedRowStorage(
     )
 end
 
+"""
+    VariableBlockCompressedRowStorage(
+        sbm::SymmetricBlockMatrix;
+        scheduler=sbm.scheduler
+    )
+
+Converts a `SymmetricBlockMatrix` to `VariableBlockCompressedRowStorage` format.
+The symmetric structure is expanded by including both the diagonal blocks, off-diagonal blocks,
+and their transposes explicitly.
+
+# Arguments
+
+  - `sbm`: A `SymmetricBlockMatrix` to convert.
+  - `scheduler`: A scheduler for parallel computation. Defaults to the scheduler from `sbm`.
+
+# Returns
+
+  - A `VariableBlockCompressedRowStorage` instance in compressed row storage format.
+
+# Notes
+
+  - No sanity checks are performed on the input matrix. It is assumed that the blocks in the
+    `SymmetricBlockMatrix` have contiguous row and column indices.
+  - The conversion expands the symmetric structure: diagonal blocks are included once, while
+    off-diagonal blocks are included twice (once as-is and once transposed).
+  - The conversion uses lazy functors to avoid unnecessary memory allocations during construction.
+"""
 function VariableBlockCompressedRowStorage(
     sbm::SymmetricBlockMatrix{T,D,P,M}; scheduler=sbm.scheduler
 ) where {T,D,P,M}
@@ -125,6 +220,7 @@ for (FunctorName, accessor, lengthfield) in [
     end
 end
 
+# Functors for SymmetricBlockMatrix using metaprogramming
 for (FunctorName, diag_accessor, offdiag_accessor, transpose_offdiag_accessor) in [
     (
         :_SymmetricMatrixFunctor,

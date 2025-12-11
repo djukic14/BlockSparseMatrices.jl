@@ -122,7 +122,7 @@ function rowcolvals(A::VariableBlockCompressedRowStorage)
     return rows, cols, vals
 end
 
-#TODO: for vbcrs and bcrs write function that constructs sparse matrix directly without
+#TODO: for vbcrs: write function that constructs sparse matrix directly without
 # calling sparse(rowcolvals(...))
 function SparseArrays.sparse(A::AbstractBlockMatrix)
     return SparseArrays.sparse(rowcolvals(A)..., size(A)...)

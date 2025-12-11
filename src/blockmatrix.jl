@@ -1,5 +1,5 @@
 """
-    struct BlockSparseMatrix{T,M,S} <: AbstractBlockMatrix{T}
+    struct BlockSparseMatrix{T,M,P,S} <: AbstractBlockMatrix{T}
 
 A concrete implementation of a block sparse matrix, which is a sparse matrix composed of
 smaller dense matrix blocks.
@@ -8,11 +8,14 @@ smaller dense matrix blocks.
 
   - `T`: The element type of the matrix.
   - `M`: The type of the matrix blocks.
+  - `P`: The integer type used for indexing.
   - `S`: The type of the scheduler.
 
 # Fields
 
   - `blocks`: A vector of matrix blocks that comprise the block sparse matrix.
+  - `rowindices`: A vector where each element is a vector of row indices for the corresponding block.
+  - `colindices`: A vector where each element is a vector of column indices for the corresponding block.
   - `size`: A tuple representing the size of the block sparse matrix.
   - `colors`: A vector of colors, where each color is a vector of block indices that can be
     processed in parallel without race conditions.
@@ -30,21 +33,23 @@ struct BlockSparseMatrix{T,M,P<:Integer,S} <: AbstractBlockMatrix{T}
     scheduler::S
 end
 
-#TODO: remove blocks from here and use same style as vbcrs
-
 """
     BlockSparseMatrix(
-        blocks::Vector{M},
+        blocks,
+        rowindices,
+        colindices,
         size::Tuple{Int,Int};
         coloringalgorithm=coloringalgorithm,
         scheduler=SerialScheduler(),
     )
 
-Constructs a new `BlockSparseMatrix` instance from the given blocks and size.
+Constructs a new `BlockSparseMatrix` instance from the given blocks, their indices, and size.
 
 # Arguments
 
-  - `blocks`: A vector of blocks
+  - `blocks`: A vector of matrices representing the blocks.
+  - `rowindices`: A vector where each element is a vector of row indices for the corresponding block.
+  - `colindices`: A vector where each element is a vector of column indices for the corresponding block.
   - `size`: A tuple representing the size of the block sparse matrix.
   - `coloringalgorithm`: The algorithm from `GraphsColoring.jl` used to color the blocks for
     parallel computation. Defaults to `coloringalgorithm`.
@@ -174,7 +179,7 @@ function colors(A::BlockSparseMatrix)
 end
 
 """
-    colors(A::BlockSparseMatrix)
+    transposecolors(A::BlockSparseMatrix)
 
 Returns the colors used for multithreading in the transposed matrix-vector product computations for the
 given `BlockSparseMatrix`. These colors are created using `GraphsColoring.jl` and represent a

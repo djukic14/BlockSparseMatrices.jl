@@ -61,6 +61,7 @@ function scheduler(
     return scheduler(A.lmap)
 end
 
+# return the number of nonzeros in a block
 function _nnz(A)
     return SparseArrays.nnz(A)
 end
