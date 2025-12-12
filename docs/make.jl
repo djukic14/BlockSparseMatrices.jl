@@ -15,12 +15,12 @@ makedocs(;
         assets=String[],
     ),
     pages=[
-    # "Introduction" => "index.md",
-    # "BlockSparseMatrix" => "block.md",
-    # "SymmetricBlockMatrix" => "symmetric.md",
-    # "Compressed Row Storage" => "compressed.md",
-    # "Contributing" => "contributing.md",
-    # "API Reference" => "apiref.md",
+        "Introduction" => "index.md",
+        "BlockSparseMatrix" => "block.md",
+        "SymmetricBlockMatrix" => "symmetric.md",
+        "VariableBlockCompressedRowStorage" => "vbcrs.md",
+        "Contributing" => "contributing.md",
+        "API Reference" => "apiref.md",
     ],
 )
 

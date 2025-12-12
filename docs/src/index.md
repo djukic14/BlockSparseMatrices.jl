@@ -15,8 +15,6 @@ It also includes specialized algorithms for symmetric block‑sparse matrices, s
 |-----------|-------------|
 | `*` (matrix‑vector product) | Fast, multithreaded multiplication. |
 | `transpose` / `adjoint` | Returns the (adjoint) transpose of a block‑sparse matrix. |
-| `getindex` | Access individual elements of the matrix. |
-| `setindex!` | Modify elements in‑place. |
 | Visualization | Visual inspection via [UnicodePlots](https://github.com/JuliaPlots/UnicodePlots.jl). |
 | `sparse` | Convert to a standard `SparseMatrixCSC` from [SparseArrays](https://github.com/JuliaSparse/SparseArrays.jl). |
 
