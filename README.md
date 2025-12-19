@@ -6,7 +6,7 @@
   <source media="(prefers-color-scheme: light)" srcset="docs/src/assets/logo.svg" height="150">
   <img alt="" src="" height="150">
 </picture>
-</p>>
+</p>
 
 [![Stable](https://img.shields.io/badge/docs-stable-blue.svg)](https://djukic14.github.io/BlockSparseMatrices.jl/stable/)
 [![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://djukic14.github.io/BlockSparseMatrices.jl/dev/)
