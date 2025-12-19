@@ -105,47 +105,5 @@ using UnicodePlots
 
         @test nnz(transpose(b)) == nnz(bsparse)
         @test nnz(transpose(bparallel)) == nnz(bsparse)
-
-        rows = rowvals(bsparse)
-        vals = nonzeros(bsparse)
-        for j in 1:size(bsparse, 1)
-            for i in nzrange(bsparse, j)
-                row = rows[i]
-                @test vals[i] == b[row, j]
-
-                @test vals[i] == bparallel[row, j]
-            end
-        end
-
-        bsparse.nzval .= 1
-        negativebsparse = sparse(ones(size(bsparse)) - bsparse)
-
-        counter = 0
-        for j in 1:size(bsparse, 1)
-            for i in nzrange(negativebsparse, j)
-                row = rowvals(negativebsparse)[i]
-                @test_throws ErrorException b[row, j] = 10
-                @test_throws ErrorException bparallel[row, j] = 10
-
-                @test iszero(b[row, j])
-                @test iszero(bparallel[row, j])
-
-                counter > 10 && break
-                counter += 1
-            end
-        end
-
-        for j in 1:size(bsparse, 1)
-            for i in nzrange(bsparse, j)
-                row = rows[i]
-                b[row, j] = 0
-                bparallel[row, j] = 0
-            end
-        end
-
-        bcollected = b[:, :]
-        @test all(iszero, bcollected)
-        bparallelcollected = bparallel[:, :]
-        @test all(iszero, bparallelcollected)
     end
 end

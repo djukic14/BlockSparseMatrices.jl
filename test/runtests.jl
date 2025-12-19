@@ -3,6 +3,7 @@ using Test, TestItems, TestItemRunner
 @testitem "BlockSparseMatrices" begin
     include("test_blockmatrix.jl")
     include("test_symmetricblockmatrix.jl")
+    include("test_vbcrs.jl")
 end
 
 @testitem "Code quality (Aqua.jl)" begin
@@ -11,8 +12,7 @@ end
 end
 
 @testitem "Code formatting (JuliaFormatter.jl)" begin
-    using JuliaFormatter
-    using BlockSparseMatrices
+    using JuliaFormatter, BlockSparseMatrices
     @test JuliaFormatter.format(pkgdir(BlockSparseMatrices), overwrite=false)
 end
 

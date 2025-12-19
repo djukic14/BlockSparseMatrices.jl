@@ -18,6 +18,7 @@ makedocs(;
         "Introduction" => "index.md",
         "BlockSparseMatrix" => "block.md",
         "SymmetricBlockMatrix" => "symmetric.md",
+        "VariableBlockCompressedRowStorage" => "vbcrs.md",
         "Contributing" => "contributing.md",
         "API Reference" => "apiref.md",
     ],
