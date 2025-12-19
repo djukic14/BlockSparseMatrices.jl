@@ -1,8 +1,12 @@
 # BlockSparseMatrices
 
 <p align="center">
-  <img src="docs/src/assets/logo.svg" alt="Description" width="150"/>
-</p>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/src/assets/logo_darkmode.svg" height="150">
+  <source media="(prefers-color-scheme: light)" srcset="docs/src/assets/logo.svg" height="150">
+  <img alt="" src="" height="150">
+</picture>
+</p>>
 
 [![Stable](https://img.shields.io/badge/docs-stable-blue.svg)](https://djukic14.github.io/BlockSparseMatrices.jl/stable/)
 [![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://djukic14.github.io/BlockSparseMatrices.jl/dev/)
