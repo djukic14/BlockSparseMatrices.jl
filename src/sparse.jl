@@ -103,7 +103,7 @@ function rowcolvals(A::VariableBlockCompressedRowStorage)
     for browidx in 1:(length(A.rowptr) - 1)
         for bidx in A.rowptr[browidx]:(A.rowptr[browidx + 1] - 1)
             block = A.blocks[bidx]
-            row_start = A.rowindices[bidx]
+            row_start = A.rowindices[browidx]
             col_start = A.colindices[bidx]
             nrows, ncols = size(block)
 
