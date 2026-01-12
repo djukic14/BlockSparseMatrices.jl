@@ -97,24 +97,22 @@ function VariableBlockCompressedRowStorage(
     rowptr = Vector{Int}(undef, nblockrows + 1)
     blocks = Vector{M}(undef, length(matrices))
     cindices = Vector{V}(undef, length(matrices))
-    rowindicesvec = Vector{V}(undef, length(matrices))
+    rowindicesvec = Vector{V}(undef, nblockrows)
 
     # Fill the arrays in sorted order
     rowptr[1] = 1
+    rowindicesvec[1] = rowindices[perm[1]]
     rowidx = 1
-    prevrow = rowindices[perm[1]]
 
     for (outidx, inidx) in enumerate(perm)
-        currrow = rowindices[inidx]
-        if currrow != prevrow
-            rowptr[rowidx + 1] = outidx
+        if rowindices[inidx] != rowindicesvec[rowidx]
             rowidx += 1
-            prevrow = currrow
+            rowptr[rowidx] = outidx
+            rowindicesvec[rowidx] = rowindices[inidx]
         end
 
         blocks[outidx] = matrices[inidx]
         cindices[outidx] = colindices[inidx]
-        rowindicesvec[outidx] = rowindices[inidx]
     end
     rowptr[end] = length(matrices) + 1
 
@@ -279,7 +277,9 @@ function LinearMaps._unsafe_mul!(
         for bidx in A.rowptr[browidx]:(A.rowptr[browidx + 1] - 1)
             block = A.blocks[bidx]
             x_block = view(x, A.colindices[bidx]:(A.colindices[bidx] + size(block, 2) - 1))
-            y_block = view(y, A.rowindices[bidx]:(A.rowindices[bidx] + size(block, 1) - 1))
+            y_block = view(
+                y, A.rowindices[browidx]:(A.rowindices[browidx] + size(block, 1) - 1)
+            )
             LinearAlgebra.mul!(y_block, block, x_block, α, true)
         end
     end
@@ -319,7 +319,7 @@ function _unsafe_mul_transpose!(
                 y, lmap.colindices[bidx]:(lmap.colindices[bidx] + size(block, 2) - 1)
             )
             x_block = view(
-                x, lmap.rowindices[bidx]:(lmap.rowindices[bidx] + size(block, 1) - 1)
+                x, lmap.rowindices[browidx]:(lmap.rowindices[browidx] + size(block, 1) - 1)
             )
             LinearAlgebra.mul!(y_block, op(block), x_block, α, true)
         end
