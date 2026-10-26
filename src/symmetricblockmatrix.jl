@@ -51,7 +51,8 @@ end
         rowindices,
         colindices,
         size::Tuple{Int,Int};
-        scheduler=DynamicScheduler(),
+        coloringalgorithm=coloringalgorithm,
+        scheduler=SerialScheduler(),
     )
 
 Constructs a new `SymmetricBlockMatrix` instance from the given diagonal and off-diagonal blocks with their indices.
@@ -64,7 +65,9 @@ Constructs a new `SymmetricBlockMatrix` instance from the given diagonal and off
   - `rowindices`: A vector where each element is a vector of row indices for the corresponding off-diagonal block.
   - `colindices`: A vector where each element is a vector of column indices for the corresponding off-diagonal block.
   - `size`: A tuple representing the size of the symmetric block matrix.
-  - `scheduler`: The scheduler used to manage parallel computation. Defaults to `DynamicScheduler()`.
+  - `coloringalgorithm`: The algorithm from `GraphsColoring.jl` used to color blocks for
+    parallel computation. Defaults to `WorkstreamDSATUR`.
+  - `scheduler`: The scheduler used to manage parallel computation. Defaults to `SerialScheduler()`.
 
 # Returns
 
@@ -77,7 +80,8 @@ function SymmetricBlockMatrix(
     rowindices,
     colindices,
     size::Tuple{Int,Int};
-    scheduler=DynamicScheduler(),
+    coloringalgorithm=coloringalgorithm,
+    scheduler=SerialScheduler(),
 )
     return SymmetricBlockMatrix(
         diagonals,
@@ -87,6 +91,7 @@ function SymmetricBlockMatrix(
         colindices,
         size[1],
         size[2];
+        coloringalgorithm=coloringalgorithm,
         scheduler=scheduler,
     )
 end
@@ -100,18 +105,118 @@ function SymmetricBlockMatrix(
     rows::Int,
     cols::Int;
     scheduler=SerialScheduler(),
+    coloringalgorithm=coloringalgorithm,
 ) where {D,M}
-    diagonalcolors =
-        color(conflictgraph(ColorInfo(diagonalindices)); algorithm=coloringalgorithm).colors
+    T = if !isempty(diagonals)
+        eltype(D)
+    elseif !isempty(offdiagonals)
+        eltype(M)
+    elseif D <: AbstractMatrix
+        eltype(D)
+    elseif M <: AbstractMatrix
+        eltype(M)
+    else
+        throw(
+            ArgumentError(
+                "Specify the element type as SymmetricBlockMatrix{T} for an empty matrix with untyped blocks",
+            ),
+        )
+    end
+    return SymmetricBlockMatrix{T}(
+        diagonals,
+        diagonalindices,
+        offdiagonals,
+        rowindices,
+        colindices,
+        rows,
+        cols;
+        scheduler=scheduler,
+        coloringalgorithm=coloringalgorithm,
+    )
+end
 
-    offdiagonalcolors =
-        color(conflictgraph(ColorInfo(rowindices)); algorithm=coloringalgorithm).colors
-    transposeoffdiagonalcolors =
-        color(conflictgraph(ColorInfo(colindices)); algorithm=coloringalgorithm).colors
+function _symmetricblockcolors(blocks, indices, scheduler, coloringalgorithm)
+    if isempty(blocks)
+        return Vector{Vector{Int}}()
+    elseif isserial(scheduler)
+        return [collect(eachindex(blocks))]
+    else
+        return color(conflictgraph(ColorInfo(indices)); algorithm=coloringalgorithm).colors
+    end
+end
 
-    return SymmetricBlockMatrix{
-        eltype(eltype(D)),D,eltype(eltype(rowindices)),M,typeof(scheduler)
-    }(
+function SymmetricBlockMatrix{T}(
+    diagonals,
+    diagonalindices,
+    offdiagonals,
+    rowindices,
+    colindices,
+    size::Tuple{Int,Int};
+    scheduler=SerialScheduler(),
+    coloringalgorithm=coloringalgorithm,
+) where {T}
+    return SymmetricBlockMatrix{T}(
+        diagonals,
+        diagonalindices,
+        offdiagonals,
+        rowindices,
+        colindices,
+        size[1],
+        size[2];
+        scheduler=scheduler,
+        coloringalgorithm=coloringalgorithm,
+    )
+end
+
+function SymmetricBlockMatrix{T}(
+    diagonals::Vector{D},
+    diagonalindices,
+    offdiagonals::Vector{M},
+    rowindices,
+    colindices,
+    rows::Int,
+    cols::Int;
+    scheduler=SerialScheduler(),
+    coloringalgorithm=coloringalgorithm,
+) where {T,D,M}
+    length(diagonals) == length(diagonalindices) ||
+        throw(ArgumentError("Number of diagonal blocks and index lists must match"))
+    length(offdiagonals) == length(rowindices) == length(colindices) ||
+        throw(ArgumentError("Number of off-diagonal blocks and index lists must match"))
+
+    P = if !isempty(rowindices)
+        eltype(eltype(rowindices))
+    elseif !isempty(colindices)
+        eltype(eltype(colindices))
+    elseif !isempty(diagonalindices)
+        eltype(eltype(diagonalindices))
+    else
+        Int
+    end
+    P <: Integer || throw(ArgumentError("Block indices must have an integer element type"))
+
+    # Only convert index arrays if they do not already have the expected type.
+    if !(diagonalindices isa Vector{Vector{P}})
+        diagonalindices = Vector{Vector{P}}(diagonalindices)
+    end
+    if !(rowindices isa Vector{Vector{P}})
+        rowindices = Vector{Vector{P}}(rowindices)
+    end
+    if !(colindices isa Vector{Vector{P}})
+        colindices = Vector{Vector{P}}(colindices)
+    end
+
+    # no coloring needed for single-threaded execution
+    diagonalcolors = _symmetricblockcolors(
+        diagonals, diagonalindices, scheduler, coloringalgorithm
+    )
+    offdiagonalcolors = _symmetricblockcolors(
+        offdiagonals, rowindices, scheduler, coloringalgorithm
+    )
+    transposeoffdiagonalcolors = _symmetricblockcolors(
+        offdiagonals, colindices, scheduler, coloringalgorithm
+    )
+    return SymmetricBlockMatrix{T,D,P,M,typeof(scheduler)}(
         diagonals,
         diagonalindices,
         offdiagonals,

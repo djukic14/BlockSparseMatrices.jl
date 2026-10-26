@@ -5,6 +5,7 @@ using JLD2
 using LinearAlgebra
 using OhMyThreads
 using UnicodePlots
+using GraphsColoring: WorkstreamGreedy
 @testset "SymmetricBlockMatrix" begin
     blockdict = load(
         joinpath(
@@ -106,4 +107,105 @@ using UnicodePlots
         @test nnz(transpose(b)) == nnz(bsparse)
         @test nnz(transpose(bparallel)) == nnz(bsparse)
     end
+end
+
+@testset "SymmetricBlockMatrix constructors" begin
+    for scheduler in (SerialScheduler(), DynamicScheduler())
+        empty_matrix = SymmetricBlockMatrix{Float64}(
+            [], [], [], [], [], (3, 3); scheduler=scheduler
+        )
+        @test size(empty_matrix) == (3, 3)
+        @test eltype(empty_matrix) == Float64
+        @test nnz(empty_matrix) == 0
+        @test empty_matrix * ones(3) == zeros(3)
+        @test transpose(empty_matrix) * ones(3) == zeros(3)
+        @test adjoint(empty_matrix) * ones(3) == zeros(3)
+
+        diagonal_matrix = SymmetricBlockMatrix(
+            [Float64[2 0; 0 3]],
+            [[1, 2]],
+            Matrix{Float64}[],
+            Vector{Int}[],
+            Vector{Int}[],
+            (2, 2);
+            scheduler=scheduler,
+        )
+        @test diagonal_matrix * ones(2) ≈ [2.0, 3.0]
+        @test transpose(diagonal_matrix) * ones(2) ≈ [2.0, 3.0]
+        @test adjoint(diagonal_matrix) * ones(2) ≈ [2.0, 3.0]
+
+        offdiagonal_matrix = SymmetricBlockMatrix(
+            Matrix{Float64}[],
+            Vector{Int}[],
+            [reshape([4.0], 1, 1)],
+            [[1]],
+            [[2]],
+            (2, 2);
+            scheduler=scheduler,
+        )
+        @test offdiagonal_matrix * [1.0, 2.0] ≈ [8.0, 4.0]
+        @test transpose(offdiagonal_matrix) * [1.0, 2.0] ≈ [8.0, 4.0]
+        @test adjoint(offdiagonal_matrix) * [1.0, 2.0] ≈ [8.0, 4.0]
+    end
+
+    diagonal_indices = [[1]]
+    row_indices = [[1]]
+    col_indices = [[2]]
+    serial_matrix = SymmetricBlockMatrix(
+        [reshape([1.0], 1, 1)],
+        diagonal_indices,
+        [reshape([2.0], 1, 1)],
+        row_indices,
+        col_indices,
+        (2, 2);
+        scheduler=SerialScheduler(),
+    )
+    @test serial_matrix.diagonalcolors == [[1]]
+    @test serial_matrix.offdiagonalcolors == [[1]]
+    @test serial_matrix.transposeoffdiagonalcolors == [[1]]
+    @test serial_matrix.diagonalindices === diagonal_indices
+    @test serial_matrix.rowindices === row_indices
+    @test serial_matrix.colindices === col_indices
+
+    @test_throws ArgumentError SymmetricBlockMatrix([], [], [], [], [], (3, 3))
+
+    @test_throws ArgumentError SymmetricBlockMatrix{Float64}(
+        [reshape([1.0], 1, 1)],
+        Vector{Int}[],
+        Matrix{Float64}[],
+        Vector{Int}[],
+        Vector{Int}[],
+        (2, 2);
+        scheduler=SerialScheduler(),
+    )
+    @test_throws ArgumentError SymmetricBlockMatrix{Float64}(
+        Matrix{Float64}[],
+        Vector{Int}[],
+        [reshape([2.0], 1, 1)],
+        Vector{Int}[],
+        [[2]],
+        (2, 2);
+        scheduler=SerialScheduler(),
+    )
+    @test_throws ArgumentError SymmetricBlockMatrix{Float64}(
+        Matrix{Float64}[],
+        Vector{Int}[],
+        [reshape([2.0], 1, 1)],
+        [[1]],
+        Vector{Int}[],
+        (2, 2);
+        scheduler=SerialScheduler(),
+    )
+
+    greedy_matrix = SymmetricBlockMatrix(
+        [reshape([1.0], 1, 1)],
+        [[1]],
+        [reshape([2.0], 1, 1)],
+        [[1]],
+        [[2]],
+        (2, 2);
+        scheduler=DynamicScheduler(),
+        coloringalgorithm=WorkstreamGreedy,
+    )
+    @test greedy_matrix * [1.0, 2.0] ≈ [5.0, 2.0]
 end

@@ -38,7 +38,7 @@ end
 m = meshsphere(1.0, 0.1)
 X = raviartthomas(m)
 sizeS = (numfunctions(X), numfunctions(X))
-tree = TwoNTree(X, 0.2)
+tree = TwoNTree(X; builder=TwoNTreeBuilder(; minhalfsize=0.2))
 
 selfvalues, colvalues, rowvalues = H2Trees.nearinteractions(
     tree; extractselfvalues=true, isnear=GalerkinSymmetricIsNearFunctor(H2Trees.isnear)
@@ -83,7 +83,7 @@ end # hide
 m = meshsphere(1.0, 0.1) # hide
 X = raviartthomas(m) # hide
 sizeS = (numfunctions(X), numfunctions(X)) # hide
-tree = TwoNTree(X, 0.2) # hide
+tree = TwoNTree(X; builder=TwoNTreeBuilder(; minhalfsize=0.2)) # hide
 
 selfvalues, colvalues, rowvalues = H2Trees.nearinteractions( # hide
     tree; extractselfvalues=true, isnear=GalerkinSymmetricIsNearFunctor(H2Trees.isnear) # hide
@@ -137,7 +137,7 @@ end # hide
 m = meshsphere(1.0, 0.1) # hide
 X = raviartthomas(m) # hide
 sizeS = (numfunctions(X), numfunctions(X)) # hide
-tree = TwoNTree(X, 0.2) # hide
+tree = TwoNTree(X; builder=TwoNTreeBuilder(; minhalfsize=0.2)) # hide
 
 selfvalues, colvalues, rowvalues = H2Trees.nearinteractions( # hide
     tree; extractselfvalues=true, isnear=GalerkinSymmetricIsNearFunctor(H2Trees.isnear) # hide
@@ -193,7 +193,7 @@ end # hide
 m = meshsphere(1.0, 0.1) # hide
 X = raviartthomas(m) # hide
 sizeS = (numfunctions(X), numfunctions(X)) # hide
-tree = TwoNTree(X, 0.2) # hide
+tree = TwoNTree(X; builder=TwoNTreeBuilder(; minhalfsize=0.2)) # hide
 
 selfvalues, colvalues, rowvalues = H2Trees.nearinteractions(  # hide
     tree; extractselfvalues=true, isnear=GalerkinSymmetricIsNearFunctor(H2Trees.isnear)  # hide

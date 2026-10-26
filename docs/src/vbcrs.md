@@ -52,7 +52,7 @@ end #hide
 
 m = meshcuboid(1.0, 1.0, 1.0, 0.04) #hide
 X = raviartthomas(m) #hide
-tree = TwoNTree(X, 0.05) #hide
+tree = TwoNTree(X; builder=TwoNTreeBuilder(; minhalfsize=0.05)) #hide
 X = sortbasis!(tree, X) #hide
 
 for leaf in H2Trees.leaves(tree) #hide
@@ -121,7 +121,7 @@ end #hide
 
 m = meshcuboid(1.0, 1.0, 1.0, 0.04) #hide
 X = raviartthomas(m) #hide
-tree = TwoNTree(X, 0.05) #hide
+tree = TwoNTree(X; builder=TwoNTreeBuilder(; minhalfsize=0.05)) #hide
 X = sortbasis!(tree, X) #hide
 
 for leaf in H2Trees.leaves(tree) #hide
@@ -190,7 +190,7 @@ end #hide
 
 m = meshcuboid(1.0, 1.0, 1.0, 0.04) #hide
 X = raviartthomas(m) #hide
-tree = TwoNTree(X, 0.05) #hide
+tree = TwoNTree(X; builder=TwoNTreeBuilder(; minhalfsize=0.05)) #hide
 X = sortbasis!(tree, X) #hide
 
 for leaf in H2Trees.leaves(tree) #hide
@@ -263,7 +263,7 @@ end #hide
 
 m = meshcuboid(1.0, 1.0, 1.0, 0.04) #hide
 X = raviartthomas(m) #hide
-tree = TwoNTree(X, 0.05) #hide
+tree = TwoNTree(X; builder=TwoNTreeBuilder(; minhalfsize=0.05)) #hide
 X = sortbasis!(tree, X) #hide
 
 for leaf in H2Trees.leaves(tree) #hide
@@ -347,7 +347,7 @@ end #hide
 
 m = meshcuboid(1.0, 1.0, 1.0, 0.04) #hide
 X = raviartthomas(m) #hide
-tree = TwoNTree(X, 0.05) #hide
+tree = TwoNTree(X; builder=TwoNTreeBuilder(; minhalfsize=0.05)) #hide
 X = sortbasis!(tree, X) #hide
 
 for leaf in H2Trees.leaves(tree) #hide
@@ -422,7 +422,7 @@ end #hide
 
 m = meshcuboid(1.0, 1.0, 1.0, 0.04) #hide
 X = raviartthomas(m) #hide
-tree = TwoNTree(X, 0.05) #hide
+tree = TwoNTree(X; builder=TwoNTreeBuilder(; minhalfsize=0.05)) #hide
 X = sortbasis!(tree, X) #hide
 
 for leaf in H2Trees.leaves(tree) #hide

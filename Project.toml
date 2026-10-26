@@ -18,8 +18,8 @@ UnicodePlots = "b8865327-cd53-5732-bb35-84acbb429228"
 BlockUnicodePlots = ["UnicodePlots"]
 
 [compat]
-Aqua = "0.8"
-Graphs = "1"
+Aqua = "0.8.1"
+Graphs = "1.7.2"
 GraphsColoring = "0.2.0"
 JLD2 = "0.6"
 JuliaFormatter = "2.1"

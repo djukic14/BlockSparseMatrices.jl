@@ -8,7 +8,17 @@ end
 
 @testitem "Code quality (Aqua.jl)" begin
     using Aqua
-    Aqua.test_all(BlockSparseMatrices; unbound_args=false)
+    # The Downgrade workflow promotes the test dependencies into [deps], where they would
+    # otherwise be reported as stale because `using BlockSparseMatrices` does not load them.
+    Aqua.test_all(
+        BlockSparseMatrices;
+        unbound_args=false,
+        stale_deps=(;
+            ignore=[
+                :Aqua, :JLD2, :JuliaFormatter, :TestItemRunner, :TestItems, :UnicodePlots
+            ]
+        ),
+    )
 end
 
 @testitem "Code formatting (JuliaFormatter.jl)" begin

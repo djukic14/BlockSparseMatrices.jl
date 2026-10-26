@@ -21,7 +21,7 @@ using BlockSparseMatrices
 
 m = meshsphere(1.0, 0.1)
 X = raviartthomas(m)
-tree = TwoNTree(X, 0.2)
+tree = TwoNTree(X; builder=TwoNTreeBuilder(; minhalfsize=0.2))
 colvalues, rowvalues = H2Trees.nearinteractions(tree)
 
 blocks = Matrix{Float64}[]
@@ -43,7 +43,7 @@ using BlockSparseMatrices # hide
 
 m = meshsphere(1.0, 0.1) # hide
 X = raviartthomas(m) # hide
-tree = TwoNTree(X, 0.2) # hide
+tree = TwoNTree(X; builder=TwoNTreeBuilder(; minhalfsize=0.2)) # hide
 colvalues, rowvalues = H2Trees.nearinteractions(tree) # hide
 
 blocks = Matrix{Float64}[] # hide
@@ -73,7 +73,7 @@ using BlockSparseMatrices # hide
 
 m = meshsphere(1.0, 0.1) # hide
 X = raviartthomas(m) # hide
-tree = TwoNTree(X, 0.2) # hide
+tree = TwoNTree(X; builder=TwoNTreeBuilder(; minhalfsize=0.2)) # hide
 colvalues, rowvalues = H2Trees.nearinteractions(tree) # hide
 
 blocks = Matrix{Float64}[] # hide
@@ -105,7 +105,7 @@ using BlockSparseMatrices # hide
 
 m = meshsphere(1.0, 0.1) # hide
 X = raviartthomas(m) # hide
-tree = TwoNTree(X, 0.2) # hide
+tree = TwoNTree(X; builder=TwoNTreeBuilder(; minhalfsize=0.2)) # hide
 colvalues, rowvalues = H2Trees.nearinteractions(tree) # hide
 
 blocks = Matrix{Float64}[] # hide
